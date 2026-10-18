@@ -24,6 +24,13 @@ type PacketEvent struct {
 	Protocol    Protocol
 	Src, Dst    netip.AddrPort // port 0 for ICMP/ESP
 	Length      int
+
+	// PKTAP specific
+	EffectiveProcess
+	EffectivePID
+	EffectiveUUID
+	Delegated
+	FlowID
 }
 
 // parseTcpdumpLine parses one stdout line of `tcpdump -i pktap,all -n -q -tt -l -k INPDU`.
