@@ -7,40 +7,6 @@ import (
 	"time"
 )
 
-// Contract for parseTcpdumpLine.
-//
-// Input is one stdout line of:
-//
-//	/usr/sbin/tcpdump -i pktap,all -n -q -tt -l -k INPDU
-//
-//	-q       short tail: "tcp 39", "UDP, length 448", no decoded DNS/mDNS contents
-//	-tt      Unix seconds.microseconds, so no date or time zone guessing
-//	-k INPDU interface, process name, PID, direction, process UUID
-//
-// Shape:
-//
-//	<epoch> [(<metadata>)] IP|IP6 <src> > <dst>: <tail>
-//
-// Rules:
-//   - Only IPv4/IPv6 packet lines produce an event. Everything else returns ok=false:
-//     tcpdump banners, stats, ARP, blank or truncated lines, HH:MM:SS timestamps.
-//   - The metadata block is optional. Fields are separated by ", ". The block ends at
-//     ") IP " or ") IP6 ", so a process name may contain parentheses.
-//   - The first field is the interface when it has no space and is not "in"/"out".
-//   - "proc NAME:PID:UUID" or "proc NAME:PID". The UUID is present when the last
-//     colon part is a 36-character UUID. PID is the part before it. The name is
-//     everything before the PID and may contain dots, spaces and colons.
-//   - A proc field with a bad PID (not a number, or above uint32) leaves Process,
-//     PID and ProcessUUID empty. The packet is still returned.
-//   - "eproc ...", "svc ...", "flowid ...", flags like "so"/"ka" and unknown fields are ignored.
-//   - "in"/"out" set Direction. No direction field leaves it empty.
-//   - Addresses: the whole token is the address when it parses as one (ICMP, ESP).
-//     Otherwise, the port is the part after the last dot. Ports above 65535 reject the line.
-//   - Tail: "tcp N" → TCP; "UDP, length N" → UDP; "ICMP ..." → ICMP; "ICMP6, ..." → ICMPv6;
-//     "ESP(...)" → "ESP". Length is N from "tcp N" or the trailing "length N".
-//     Any other tail keeps Protocol empty and still reads a trailing "length N".
-//     A length that is not a non-negative integer stays 0.
-
 const (
 	claudeUUID  = "4c4c4422-5555-3144-a114-05a85a469ca7"
 	nodeUUID    = "1feaf41c-e9af-39ee-86e4-c387edc5ed44"
