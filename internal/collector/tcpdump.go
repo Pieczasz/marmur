@@ -26,11 +26,11 @@ type PacketEvent struct {
 	Length      int
 
 	// PKTAP specific
-	EffectiveProcess
-	EffectivePID
-	EffectiveUUID
-	Delegated
-	FlowID
+	EffectiveProcess string
+	EffectivePID     uint32
+	EffectiveUUID    string
+	Delegated        bool
+	FlowID           uint32
 }
 
 // parseTcpdumpLine parses one stdout line of `tcpdump -i pktap,all -n -q -tt -l -k INPDU`.
