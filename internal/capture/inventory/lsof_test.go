@@ -1,10 +1,12 @@
-package collector
+package inventory
 
 import (
 	"net/netip"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/Pieczasz/marmur/internal/capture"
 )
 
 func TestParseLsofStream(t *testing.T) {
@@ -13,7 +15,7 @@ func TestParseLsofStream(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    string
-		expected []SocketEvent
+		expected []capture.SocketEvent
 	}{
 		{
 			name: "Established IPv4 TCP Connection",
@@ -26,22 +28,22 @@ func TestParseLsofStream(t *testing.T) {
 				"TST=ESTABLISHED",
 				"n10.2.0.2:50867->66.203.125.13:443",
 			}, "\n"),
-			expected: []SocketEvent{
+			expected: []capture.SocketEvent{
 				{
 					ObservedAt:     fixedTime,
 					Command:        "zen",
 					PID:            59292,
 					User:           "pieczasz",
 					FileDescriptor: 115,
-					AccessMode:     'u',
-					Protocol:       TCP,
-					TCPState:       StateEstablished,
-					Local: SocketEndpoint{
+					AccessMode:     "u",
+					Protocol:       capture.TCP,
+					TCPState:       capture.StateEstablished,
+					Local: capture.SocketEndpoint{
 						Addr:       netip.MustParseAddr("10.2.0.2"),
 						Port:       50867,
 						IsWildcard: false,
 					},
-					Remote: &SocketEndpoint{
+					Remote: &capture.SocketEndpoint{
 						Addr:       netip.MustParseAddr("66.203.125.13"),
 						Port:       443,
 						IsWildcard: false,
@@ -60,17 +62,17 @@ func TestParseLsofStream(t *testing.T) {
 				"TST=LISTEN",
 				"n*:50265",
 			}, "\n"),
-			expected: []SocketEvent{
+			expected: []capture.SocketEvent{
 				{
 					ObservedAt:     fixedTime,
 					Command:        "rapportd",
 					PID:            941,
 					User:           "pieczasz",
 					FileDescriptor: 11,
-					AccessMode:     'u',
-					Protocol:       TCP,
-					TCPState:       StateListen,
-					Local: SocketEndpoint{
+					AccessMode:     "u",
+					Protocol:       capture.TCP,
+					TCPState:       capture.StateListen,
+					Local: capture.SocketEndpoint{
 						Port:       50265,
 						IsWildcard: true,
 					},
@@ -88,17 +90,17 @@ func TestParseLsofStream(t *testing.T) {
 				"PUDP",
 				"n*:*",
 			}, "\n"),
-			expected: []SocketEvent{
+			expected: []capture.SocketEvent{
 				{
 					ObservedAt:     fixedTime,
 					Command:        "identityservicesd",
 					PID:            956,
 					User:           "pieczasz",
 					FileDescriptor: 13,
-					AccessMode:     'u',
-					Protocol:       UDP,
-					TCPState:       StateNone,
-					Local: SocketEndpoint{
+					AccessMode:     "u",
+					Protocol:       capture.UDP,
+					TCPState:       capture.StateNone,
+					Local: capture.SocketEndpoint{
 						Port:       0,
 						IsWildcard: true,
 					},
@@ -117,22 +119,22 @@ func TestParseLsofStream(t *testing.T) {
 				"TST=ESTABLISHED",
 				"n[::1]:3000->[::1]:54321",
 			}, "\n"),
-			expected: []SocketEvent{
+			expected: []capture.SocketEvent{
 				{
 					ObservedAt:     fixedTime,
 					Command:        "node",
 					PID:            1234,
 					User:           "root",
 					FileDescriptor: 4,
-					AccessMode:     'w',
-					Protocol:       TCP,
-					TCPState:       StateEstablished,
-					Local: SocketEndpoint{
+					AccessMode:     "w",
+					Protocol:       capture.TCP,
+					TCPState:       capture.StateEstablished,
+					Local: capture.SocketEndpoint{
 						Addr:       netip.MustParseAddr("::1"),
 						Port:       3000,
 						IsWildcard: false,
 					},
-					Remote: &SocketEndpoint{
+					Remote: &capture.SocketEndpoint{
 						Addr:       netip.MustParseAddr("::1"),
 						Port:       54321,
 						IsWildcard: false,
@@ -161,17 +163,17 @@ func TestParseLsofStream(t *testing.T) {
 				"PUDP",
 				"n*:12345",
 			}, "\n"),
-			expected: []SocketEvent{
+			expected: []capture.SocketEvent{
 				{
 					ObservedAt:     fixedTime,
 					Command:        "daemon",
 					PID:            500,
 					User:           "user",
 					FileDescriptor: 5,
-					AccessMode:     'u',
-					Protocol:       TCP,
-					TCPState:       StateListen,
-					Local: SocketEndpoint{
+					AccessMode:     "u",
+					Protocol:       capture.TCP,
+					TCPState:       capture.StateListen,
+					Local: capture.SocketEndpoint{
 						Addr:       netip.MustParseAddr("127.0.0.1"),
 						Port:       8080,
 						IsWildcard: false,
@@ -184,15 +186,15 @@ func TestParseLsofStream(t *testing.T) {
 					PID:            500,
 					User:           "user",
 					FileDescriptor: 6,
-					AccessMode:     'u',
-					Protocol:       TCP,
-					TCPState:       StateEstablished,
-					Local: SocketEndpoint{
+					AccessMode:     "u",
+					Protocol:       capture.TCP,
+					TCPState:       capture.StateEstablished,
+					Local: capture.SocketEndpoint{
 						Addr:       netip.MustParseAddr("192.168.1.10"),
 						Port:       52000,
 						IsWildcard: false,
 					},
-					Remote: &SocketEndpoint{
+					Remote: &capture.SocketEndpoint{
 						Addr:       netip.MustParseAddr("1.1.1.1"),
 						Port:       53,
 						IsWildcard: false,
@@ -204,10 +206,10 @@ func TestParseLsofStream(t *testing.T) {
 					PID:            600,
 					User:           "user",
 					FileDescriptor: 3,
-					AccessMode:     'r',
-					Protocol:       UDP,
-					TCPState:       StateNone,
-					Local: SocketEndpoint{
+					AccessMode:     "r",
+					Protocol:       capture.UDP,
+					TCPState:       capture.StateNone,
+					Local: capture.SocketEndpoint{
 						Port:       12345,
 						IsWildcard: true,
 					},
@@ -229,17 +231,17 @@ func TestParseLsofStream(t *testing.T) {
 				"n*:443",
 				"",
 			}, "\n"),
-			expected: []SocketEvent{
+			expected: []capture.SocketEvent{
 				{
 					ObservedAt:     fixedTime,
 					Command:        "badapp",
 					PID:            777,
 					User:           "user",
 					FileDescriptor: 10,
-					AccessMode:     'u',
-					Protocol:       TCP,
-					TCPState:       StateNone,
-					Local: SocketEndpoint{
+					AccessMode:     "u",
+					Protocol:       capture.TCP,
+					TCPState:       capture.StateNone,
+					Local: capture.SocketEndpoint{
 						Port:       443,
 						IsWildcard: true,
 					},
@@ -272,22 +274,22 @@ func TestParseLsofStream(t *testing.T) {
 				"TQR=0",
 				"TQS=128",
 			}, "\n"),
-			expected: []SocketEvent{
+			expected: []capture.SocketEvent{
 				{
 					ObservedAt:     fixedTime,
 					Command:        "curl",
 					PID:            700,
 					User:           "pieczasz",
 					FileDescriptor: 20,
-					AccessMode:     'u',
-					Protocol:       TCP,
-					TCPState:       StateCloseWait,
-					Local: SocketEndpoint{
+					AccessMode:     "u",
+					Protocol:       capture.TCP,
+					TCPState:       capture.StateCloseWait,
+					Local: capture.SocketEndpoint{
 						Addr:       netip.MustParseAddr("10.2.0.2"),
 						Port:       51001,
 						IsWildcard: false,
 					},
-					Remote: &SocketEndpoint{
+					Remote: &capture.SocketEndpoint{
 						Addr:       netip.MustParseAddr("66.203.125.13"),
 						Port:       443,
 						IsWildcard: false,
@@ -299,15 +301,15 @@ func TestParseLsofStream(t *testing.T) {
 					PID:            700,
 					User:           "pieczasz",
 					FileDescriptor: 21,
-					AccessMode:     'u',
-					Protocol:       TCP,
-					TCPState:       StateTimeWait,
-					Local: SocketEndpoint{
+					AccessMode:     "u",
+					Protocol:       capture.TCP,
+					TCPState:       capture.StateTimeWait,
+					Local: capture.SocketEndpoint{
 						Addr:       netip.MustParseAddr("10.2.0.2"),
 						Port:       51002,
 						IsWildcard: false,
 					},
-					Remote: &SocketEndpoint{
+					Remote: &capture.SocketEndpoint{
 						Addr:       netip.MustParseAddr("142.250.180.206"),
 						Port:       443,
 						IsWildcard: false,
@@ -319,15 +321,15 @@ func TestParseLsofStream(t *testing.T) {
 					PID:            700,
 					User:           "pieczasz",
 					FileDescriptor: 22,
-					AccessMode:     'u',
-					Protocol:       TCP,
-					TCPState:       StateSynSent,
-					Local: SocketEndpoint{
+					AccessMode:     "u",
+					Protocol:       capture.TCP,
+					TCPState:       capture.StateSynSent,
+					Local: capture.SocketEndpoint{
 						Addr:       netip.MustParseAddr("10.2.0.2"),
 						Port:       51003,
 						IsWildcard: false,
 					},
-					Remote: &SocketEndpoint{
+					Remote: &capture.SocketEndpoint{
 						Addr:       netip.MustParseAddr("93.184.216.34"),
 						Port:       443,
 						IsWildcard: false,
@@ -348,17 +350,17 @@ func TestParseLsofStream(t *testing.T) {
 				"PICMPV6",
 				"n*:*",
 			}, "\n"),
-			expected: []SocketEvent{
+			expected: []capture.SocketEvent{
 				{
 					ObservedAt:     fixedTime,
 					Command:        "com.docker.backend",
 					PID:            63116,
 					User:           "pieczasz",
 					FileDescriptor: 98,
-					AccessMode:     'u',
-					Protocol:       ICMP,
-					TCPState:       StateNone,
-					Local: SocketEndpoint{
+					AccessMode:     "u",
+					Protocol:       capture.ICMP,
+					TCPState:       capture.StateNone,
+					Local: capture.SocketEndpoint{
 						Port:       0,
 						IsWildcard: true,
 					},
@@ -370,10 +372,10 @@ func TestParseLsofStream(t *testing.T) {
 					PID:            63116,
 					User:           "pieczasz",
 					FileDescriptor: 99,
-					AccessMode:     'u',
-					Protocol:       ICMPv6,
-					TCPState:       StateNone,
-					Local: SocketEndpoint{
+					AccessMode:     "u",
+					Protocol:       capture.ICMPv6,
+					TCPState:       capture.StateNone,
+					Local: capture.SocketEndpoint{
 						Port:       0,
 						IsWildcard: true,
 					},
@@ -397,20 +399,20 @@ func TestParseLsofStream(t *testing.T) {
 				"TQR=0",
 				"TQS=0",
 			}, "\n"),
-			expected: []SocketEvent{
+			expected: []capture.SocketEvent{
 				{
 					ObservedAt:     fixedTime,
 					Command:        "Discord Helper (Renderer)",
 					PID:            81623,
 					User:           "501",
 					FileDescriptor: 23,
-					Protocol:       UDP,
-					TCPState:       StateNone,
-					Local: SocketEndpoint{
+					Protocol:       capture.UDP,
+					TCPState:       capture.StateNone,
+					Local: capture.SocketEndpoint{
 						Addr: netip.MustParseAddr("10.2.0.2"),
 						Port: 64603,
 					},
-					Remote: &SocketEndpoint{
+					Remote: &capture.SocketEndpoint{
 						Addr: netip.MustParseAddr("162.159.135.232"),
 						Port: 443,
 					},
@@ -421,13 +423,13 @@ func TestParseLsofStream(t *testing.T) {
 					PID:            81623,
 					User:           "501",
 					FileDescriptor: 30,
-					Protocol:       TCP,
-					TCPState:       StateEstablished,
-					Local: SocketEndpoint{
+					Protocol:       capture.TCP,
+					TCPState:       capture.StateEstablished,
+					Local: capture.SocketEndpoint{
 						Addr: netip.MustParseAddr("10.2.0.2"),
 						Port: 53053,
 					},
-					Remote: &SocketEndpoint{
+					Remote: &capture.SocketEndpoint{
 						Addr: netip.MustParseAddr("162.159.130.232"),
 						Port: 443,
 					},
@@ -447,16 +449,16 @@ func TestParseLsofStream(t *testing.T) {
 				"TQR=0",
 				"TQS=0",
 			}, "\n"),
-			expected: []SocketEvent{
+			expected: []capture.SocketEvent{
 				{
 					ObservedAt:     fixedTime,
 					Command:        "full-line-inference",
 					PID:            86101,
 					User:           "501",
 					FileDescriptor: 9,
-					Protocol:       TCP,
-					TCPState:       StateListen,
-					Local: SocketEndpoint{
+					Protocol:       capture.TCP,
+					TCPState:       capture.StateListen,
+					Local: capture.SocketEndpoint{
 						Addr: netip.MustParseAddr("::1"),
 						Port: 52845,
 					},
@@ -477,20 +479,20 @@ func TestParseLsofStream(t *testing.T) {
 				"TQR=0",
 				"TQS=0",
 			}, "\n"),
-			expected: []SocketEvent{
+			expected: []capture.SocketEvent{
 				{
 					ObservedAt:     fixedTime,
 					Command:        "com.apple.WebKit.Networking",
 					PID:            400,
 					User:           "501",
 					FileDescriptor: 8,
-					Protocol:       TCP,
+					Protocol:       capture.TCP,
 					TCPState:       "CLOSED",
-					Local: SocketEndpoint{
+					Local: capture.SocketEndpoint{
 						Addr: netip.MustParseAddr("10.2.0.2"),
 						Port: 52282,
 					},
-					Remote: &SocketEndpoint{
+					Remote: &capture.SocketEndpoint{
 						Addr: netip.MustParseAddr("35.186.224.24"),
 						Port: 443,
 					},
@@ -502,8 +504,8 @@ func TestParseLsofStream(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			p := newLSOFParser(fixedTime)
-			lines := strings.Split(tt.input, "\n")
-			for _, line := range lines {
+			lines := strings.SplitSeq(tt.input, "\n")
+			for line := range lines {
 				if len(line) < 2 {
 					continue
 				}
@@ -522,7 +524,7 @@ func TestParseLsofStream(t *testing.T) {
 	}
 }
 
-func assertSocketEvent(t *testing.T, idx int, exp, act SocketEvent) {
+func assertSocketEvent(t *testing.T, idx int, exp, act capture.SocketEvent) {
 	t.Helper()
 
 	if act.PID != exp.PID {
@@ -557,7 +559,7 @@ func assertSocketEvent(t *testing.T, idx int, exp, act SocketEvent) {
 	}
 }
 
-func assertEndpoint(t *testing.T, idx int, side string, exp, act SocketEndpoint) {
+func assertEndpoint(t *testing.T, idx int, side string, exp, act capture.SocketEndpoint) {
 	t.Helper()
 
 	if exp.IsWildcard != act.IsWildcard {

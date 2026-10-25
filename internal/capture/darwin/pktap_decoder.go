@@ -1,4 +1,6 @@
-package collector
+//go:build darwin
+
+package darwin
 
 import (
 	"bytes"
@@ -7,6 +9,8 @@ import (
 	"fmt"
 	"net/netip"
 	"time"
+
+	"github.com/Pieczasz/marmur/internal/capture"
 )
 
 const (
@@ -40,19 +44,19 @@ var (
 	errUnsupportedHeader = errors.New("pktap: unsupported header")
 )
 
-func decodePktap(data []byte, ts time.Time) (PacketEvent, error) {
+func decodePktap(data []byte, ts time.Time) (capture.PacketEvent, error) {
 	if len(data) < pktapHeaderLen {
-		return PacketEvent{}, errTruncated
+		return capture.PacketEvent{}, errTruncated
 	}
 	headerLen := binary.LittleEndian.Uint32(data[pktapHeaderLengthOffset:])
 
 	if err := decodeHeader(headerLen, data); err != nil {
-		return PacketEvent{}, err
+		return capture.PacketEvent{}, err
 	}
 
 	iface := cString(data[pktapInterfaceOffset : pktapInterfaceOffset+24])
 	comm := cString(data[pktapProcessOffset : pktapProcessOffset+17])
-	ev := &PacketEvent{}
+	ev := &capture.PacketEvent{}
 
 	decodeFlags(data, ev)
 	if pid := binary.LittleEndian.Uint32(data[pktapPIDOffset:]); pid != noProcess {
@@ -66,10 +70,10 @@ func decodePktap(data []byte, ts time.Time) (PacketEvent, error) {
 	rest := data[headerLen:]
 	pre := int(binary.LittleEndian.Uint32(data[pktapLinkHeaderLengthOffset:]))
 	if pre > len(rest) {
-		return PacketEvent{}, errTruncated
+		return capture.PacketEvent{}, errTruncated
 	}
 	if err := decodeIP(ev, rest[pre:]); err != nil {
-		return PacketEvent{}, err
+		return capture.PacketEvent{}, err
 	}
 
 	if epid := binary.LittleEndian.Uint32(data[pktapEffectivePIDOffset:]); epid != noProcess {
@@ -81,13 +85,13 @@ func decodePktap(data []byte, ts time.Time) (PacketEvent, error) {
 	return *ev, nil
 }
 
-func decodeFlags(data []byte, ev *PacketEvent) {
+func decodeFlags(data []byte, ev *capture.PacketEvent) {
 	flags := binary.LittleEndian.Uint32(data[pktapFlagsOffset:])
 	switch {
 	case flags&pthFlagDirIn != 0:
-		ev.Direction = DirectionIn
+		ev.Direction = capture.DirectionIn
 	case flags&pthFlagDirOut != 0:
-		ev.Direction = DirectionOut
+		ev.Direction = capture.DirectionOut
 	}
 	ev.Delegated = flags&pthFlagDelegated != 0
 }
@@ -111,7 +115,7 @@ func decodeHeader(headerLen uint32, data []byte) error {
 	return nil
 }
 
-func decodeIP(ev *PacketEvent, ip []byte) error {
+func decodeIP(ev *capture.PacketEvent, ip []byte) error {
 	if len(ip) == 0 {
 		return errNotIP
 	}
@@ -127,7 +131,7 @@ func decodeIP(ev *PacketEvent, ip []byte) error {
 	}
 }
 
-func decodeIPv4(ev *PacketEvent, ip []byte) error {
+func decodeIPv4(ev *capture.PacketEvent, ip []byte) error {
 	if len(ip) < 20 {
 		return errTruncated
 	}
@@ -144,22 +148,22 @@ func decodeIPv4(ev *PacketEvent, ip []byte) error {
 	return decodeTransport(ev, ip[ihl:], payload, src, dst)
 }
 
-func decodeIPv4Protocol(n byte) Protocol {
+func decodeIPv4Protocol(n byte) capture.Protocol {
 	switch n {
 	case 1:
-		return ICMP
+		return capture.ICMP
 	case 6:
-		return TCP
+		return capture.TCP
 	case 17:
-		return UDP
+		return capture.UDP
 	case 50:
-		return ESP
+		return capture.ESP
 	default:
 		return ""
 	}
 }
 
-func decodeIPv6(ev *PacketEvent, ip []byte) error {
+func decodeIPv6(ev *capture.PacketEvent, ip []byte) error {
 	if len(ip) < 40 {
 		return errTruncated
 	}
@@ -172,35 +176,35 @@ func decodeIPv6(ev *PacketEvent, ip []byte) error {
 	return decodeTransport(ev, ip[40:], payload, src, dst)
 }
 
-func decodeIPv6Protocol(n byte) Protocol {
+func decodeIPv6Protocol(n byte) capture.Protocol {
 	switch n {
 	case 6:
-		return TCP
+		return capture.TCP
 	case 17:
-		return UDP
+		return capture.UDP
 	case 58:
-		return ICMPv6
+		return capture.ICMPv6
 	default:
 		return ""
 	}
 }
 
-func decodeTransport(ev *PacketEvent, l4 []byte, payload int, src, dst netip.Addr) error {
+func decodeTransport(ev *capture.PacketEvent, l4 []byte, payload int, src, dst netip.Addr) error {
 	ev.Src = netip.AddrPortFrom(src, 0)
 	ev.Dst = netip.AddrPortFrom(dst, 0)
 	ev.Length = max(payload, 0)
 
 	switch ev.Protocol {
-	case TCP:
+	case capture.TCP:
 		return decodeTCP(ev, l4, src, dst)
-	case UDP:
+	case capture.UDP:
 		return decodeUDP(ev, l4, src, dst)
 	default:
 		return nil
 	}
 }
 
-func decodeTCP(ev *PacketEvent, l4 []byte, src, dst netip.Addr) error {
+func decodeTCP(ev *capture.PacketEvent, l4 []byte, src, dst netip.Addr) error {
 	if len(l4) < 13 {
 		return errTruncated
 	}
@@ -211,7 +215,7 @@ func decodeTCP(ev *PacketEvent, l4 []byte, src, dst netip.Addr) error {
 	return nil
 }
 
-func decodeUDP(ev *PacketEvent, l4 []byte, src, dst netip.Addr) error {
+func decodeUDP(ev *capture.PacketEvent, l4 []byte, src, dst netip.Addr) error {
 	if len(l4) < 8 {
 		return errTruncated
 	}

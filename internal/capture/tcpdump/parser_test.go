@@ -1,6 +1,7 @@
-package collector
+package tcpdump
 
 import (
+	"github.com/Pieczasz/marmur/internal/capture"
 	"net/netip"
 	"strings"
 	"testing"
@@ -29,19 +30,19 @@ func TestParseTcpdumpLine(t *testing.T) {
 	tests := []struct {
 		name string
 		line string
-		want PacketEvent
+		want capture.PacketEvent
 	}{
 		{
 			name: "TCP keepalive out on VPN tunnel names the real app, extra -k A fields ignored",
 			line: tsText + " (utun6, proc claude:1084:" + claudeUUID + ", svc BE, out, ka, so, flowid 0xbef45f65, ttag 0x0, dlt 0x0, cmpgc 0x0) IP 10.2.0.2.63352 > 160.79.104.10.443: tcp 0",
-			want: PacketEvent{
+			want: capture.PacketEvent{
 				ObservedAt:  tsTime,
 				Interface:   "utun6",
 				Process:     "claude",
 				PID:         1084,
 				ProcessUUID: claudeUUID,
-				Direction:   DirectionOut,
-				Protocol:    TCP,
+				Direction:   capture.DirectionOut,
+				Protocol:    capture.TCP,
 				Src:         ap("10.2.0.2:63352"),
 				Dst:         ap("160.79.104.10:443"),
 				Length:      0,
@@ -50,14 +51,14 @@ func TestParseTcpdumpLine(t *testing.T) {
 		{
 			name: "minimal INPDU block",
 			line: tsText + " (utun6, proc claude:1084:" + claudeUUID + ", out) IP 10.2.0.2.63352 > 160.79.104.10.443: tcp 0",
-			want: PacketEvent{
+			want: capture.PacketEvent{
 				ObservedAt:  tsTime,
 				Interface:   "utun6",
 				Process:     "claude",
 				PID:         1084,
 				ProcessUUID: claudeUUID,
-				Direction:   DirectionOut,
-				Protocol:    TCP,
+				Direction:   capture.DirectionOut,
+				Protocol:    capture.TCP,
 				Src:         ap("10.2.0.2:63352"),
 				Dst:         ap("160.79.104.10:443"),
 			},
@@ -65,14 +66,14 @@ func TestParseTcpdumpLine(t *testing.T) {
 		{
 			name: "TCP data in with eproc, eproc ignored",
 			line: tsText + " (utun6, proc node:96877:" + nodeUUID + ", eproc node:96877:, svc BE, in, so, flowid 0xb7a8d17a, ttag 0x0, dlt 0x0, cmpgc 0x0) IP 34.225.159.174.443 > 10.2.0.2.62982: tcp 39",
-			want: PacketEvent{
+			want: capture.PacketEvent{
 				ObservedAt:  tsTime,
 				Interface:   "utun6",
 				Process:     "node",
 				PID:         96877,
 				ProcessUUID: nodeUUID,
-				Direction:   DirectionIn,
-				Protocol:    TCP,
+				Direction:   capture.DirectionIn,
+				Protocol:    capture.TCP,
 				Src:         ap("34.225.159.174:443"),
 				Dst:         ap("10.2.0.2:62982"),
 				Length:      39,
@@ -81,14 +82,14 @@ func TestParseTcpdumpLine(t *testing.T) {
 		{
 			name: "VPN client on Wi-Fi, dotted name, UDP",
 			line: tsText + " (en0, proc ch.protonvpn.mac:65632:" + protonUUID + ", svc BE, out, so, flowid 0xa1bc790b, ttag 0x0, dlt 0x1, cmpgc 0x0) IP 192.168.178.167.62125 > 62.169.136.103.500: UDP, length 60",
-			want: PacketEvent{
+			want: capture.PacketEvent{
 				ObservedAt:  tsTime,
 				Interface:   "en0",
 				Process:     "ch.protonvpn.mac",
 				PID:         65632,
 				ProcessUUID: protonUUID,
-				Direction:   DirectionOut,
-				Protocol:    UDP,
+				Direction:   capture.DirectionOut,
+				Protocol:    capture.UDP,
 				Src:         ap("192.168.178.167:62125"),
 				Dst:         ap("62.169.136.103:500"),
 				Length:      60,
@@ -97,14 +98,14 @@ func TestParseTcpdumpLine(t *testing.T) {
 		{
 			name: "process name with a space",
 			line: tsText + " (utun6, proc Discord Helper:76591:" + discordUUID + ", eproc Discord Helper:76591:, svc BE, in, so) IP 162.159.135.234.443 > 10.2.0.2.62379: tcp 251",
-			want: PacketEvent{
+			want: capture.PacketEvent{
 				ObservedAt:  tsTime,
 				Interface:   "utun6",
 				Process:     "Discord Helper",
 				PID:         76591,
 				ProcessUUID: discordUUID,
-				Direction:   DirectionIn,
-				Protocol:    TCP,
+				Direction:   capture.DirectionIn,
+				Protocol:    capture.TCP,
 				Src:         ap("162.159.135.234:443"),
 				Dst:         ap("10.2.0.2:62379"),
 				Length:      251,
@@ -113,14 +114,14 @@ func TestParseTcpdumpLine(t *testing.T) {
 		{
 			name: "process name with parentheses",
 			line: tsText + " (utun6, proc Discord Helper (Renderer):81623:" + discordUUID + ", out) IP 10.2.0.2.64603 > 162.159.135.232.443: UDP, length 1200",
-			want: PacketEvent{
+			want: capture.PacketEvent{
 				ObservedAt:  tsTime,
 				Interface:   "utun6",
 				Process:     "Discord Helper (Renderer)",
 				PID:         81623,
 				ProcessUUID: discordUUID,
-				Direction:   DirectionOut,
-				Protocol:    UDP,
+				Direction:   capture.DirectionOut,
+				Protocol:    capture.UDP,
 				Src:         ap("10.2.0.2:64603"),
 				Dst:         ap("162.159.135.232:443"),
 				Length:      1200,
@@ -129,12 +130,12 @@ func TestParseTcpdumpLine(t *testing.T) {
 		{
 			name: "NPD block: no interface, no UUID, PID is the last part",
 			line: tsText + " (proc ch.protonvpn.mac:74422, in) IP 192.0.2.1.443 > 198.51.100.10.51690: UDP, length 448",
-			want: PacketEvent{
+			want: capture.PacketEvent{
 				ObservedAt: tsTime,
 				Process:    "ch.protonvpn.mac",
 				PID:        74422,
-				Direction:  DirectionIn,
-				Protocol:   UDP,
+				Direction:  capture.DirectionIn,
+				Protocol:   capture.UDP,
 				Src:        ap("192.0.2.1:443"),
 				Dst:        ap("198.51.100.10:51690"),
 				Length:     448,
@@ -143,14 +144,14 @@ func TestParseTcpdumpLine(t *testing.T) {
 		{
 			name: "name with colons and a UUID",
 			line: tsText + " (en0, proc com.example:helper:4242:" + claudeUUID + ", out) IP 10.0.0.2.5000 > 10.0.0.3.80: tcp 1",
-			want: PacketEvent{
+			want: capture.PacketEvent{
 				ObservedAt:  tsTime,
 				Interface:   "en0",
 				Process:     "com.example:helper",
 				PID:         4242,
 				ProcessUUID: claudeUUID,
-				Direction:   DirectionOut,
-				Protocol:    TCP,
+				Direction:   capture.DirectionOut,
+				Protocol:    capture.TCP,
 				Src:         ap("10.0.0.2:5000"),
 				Dst:         ap("10.0.0.3:80"),
 				Length:      1,
@@ -159,13 +160,13 @@ func TestParseTcpdumpLine(t *testing.T) {
 		{
 			name: "name with colons and no UUID",
 			line: tsText + " (en0, proc com.example:helper:4242, out) IP 10.0.0.2.5000 > 10.0.0.3.80: tcp 1",
-			want: PacketEvent{
+			want: capture.PacketEvent{
 				ObservedAt: tsTime,
 				Interface:  "en0",
 				Process:    "com.example:helper",
 				PID:        4242,
-				Direction:  DirectionOut,
-				Protocol:   TCP,
+				Direction:  capture.DirectionOut,
+				Protocol:   capture.TCP,
 				Src:        ap("10.0.0.2:5000"),
 				Dst:        ap("10.0.0.3:80"),
 				Length:     1,
@@ -174,14 +175,14 @@ func TestParseTcpdumpLine(t *testing.T) {
 		{
 			name: "kernel PID 0 is a real PID",
 			line: tsText + " (en0, proc kernel_task:0:" + kernelUUID + ", out) IP 192.168.178.167.5000 > 192.168.178.1.53: UDP, length 30",
-			want: PacketEvent{
+			want: capture.PacketEvent{
 				ObservedAt:  tsTime,
 				Interface:   "en0",
 				Process:     "kernel_task",
 				PID:         0,
 				ProcessUUID: kernelUUID,
-				Direction:   DirectionOut,
-				Protocol:    UDP,
+				Direction:   capture.DirectionOut,
+				Protocol:    capture.UDP,
 				Src:         ap("192.168.178.167:5000"),
 				Dst:         ap("192.168.178.1:53"),
 				Length:      30,
@@ -190,11 +191,11 @@ func TestParseTcpdumpLine(t *testing.T) {
 		{
 			name: "no proc field: router advertisement still counted, ICMPv6 has no ports",
 			line: tsText + " (en0, svc BE, in, flowid 0x0, ttag 0x0, dlt 0x1, cmpgc 0x0) IP6 fe80::c6eb:39ff:fe51:14f2 > ff02::1: ICMP6, router advertisement, length 136",
-			want: PacketEvent{
+			want: capture.PacketEvent{
 				ObservedAt: tsTime,
 				Interface:  "en0",
-				Direction:  DirectionIn,
-				Protocol:   ICMPv6,
+				Direction:  capture.DirectionIn,
+				Protocol:   capture.ICMPv6,
 				Src:        addrOnly("fe80::c6eb:39ff:fe51:14f2"),
 				Dst:        addrOnly("ff02::1"),
 				Length:     136,
@@ -203,11 +204,11 @@ func TestParseTcpdumpLine(t *testing.T) {
 		{
 			name: "eproc alone is not a proc",
 			line: tsText + " (lo0, eproc :688:" + mdnsEUUID + ", svc CTL, out, so) IP6 fe80::a8ab:c9ff:fe4f:79de.5353 > ff02::fb.5353: UDP, length 63",
-			want: PacketEvent{
+			want: capture.PacketEvent{
 				ObservedAt: tsTime,
 				Interface:  "lo0",
-				Direction:  DirectionOut,
-				Protocol:   UDP,
+				Direction:  capture.DirectionOut,
+				Protocol:   capture.UDP,
 				Src:        ap("[fe80::a8ab:c9ff:fe4f:79de]:5353"),
 				Dst:        ap("[ff02::fb]:5353"),
 				Length:     63,
@@ -216,14 +217,14 @@ func TestParseTcpdumpLine(t *testing.T) {
 		{
 			name: "mDNSResponder with empty-name eproc, IPv6 UDP on loopback",
 			line: tsText + " (lo0, proc mDNSResponder:688:" + mdnsUUID + ", eproc :688:" + mdnsEUUID + ", svc CTL, out, so, flowid 0x9e0d82f1, ttag 0x0, dlt 0x0, cmpgc 0x0) IP6 fe80::a8ab:c9ff:fe4f:79de.5353 > ff02::fb.5353: UDP, length 63",
-			want: PacketEvent{
+			want: capture.PacketEvent{
 				ObservedAt:  tsTime,
 				Interface:   "lo0",
 				Process:     "mDNSResponder",
 				PID:         688,
 				ProcessUUID: mdnsUUID,
-				Direction:   DirectionOut,
-				Protocol:    UDP,
+				Direction:   capture.DirectionOut,
+				Protocol:    capture.UDP,
 				Src:         ap("[fe80::a8ab:c9ff:fe4f:79de]:5353"),
 				Dst:         ap("[ff02::fb]:5353"),
 				Length:      63,
@@ -232,14 +233,14 @@ func TestParseTcpdumpLine(t *testing.T) {
 		{
 			name: "IPv6 TCP with ports",
 			line: tsText + " (en0, proc curl:700:" + claudeUUID + ", out) IP6 2001:db8::5.51000 > 2001:db8::1.443: tcp 10",
-			want: PacketEvent{
+			want: capture.PacketEvent{
 				ObservedAt:  tsTime,
 				Interface:   "en0",
 				Process:     "curl",
 				PID:         700,
 				ProcessUUID: claudeUUID,
-				Direction:   DirectionOut,
-				Protocol:    TCP,
+				Direction:   capture.DirectionOut,
+				Protocol:    capture.TCP,
 				Src:         ap("[2001:db8::5]:51000"),
 				Dst:         ap("[2001:db8::1]:443"),
 				Length:      10,
@@ -248,14 +249,14 @@ func TestParseTcpdumpLine(t *testing.T) {
 		{
 			name: "ICMP echo has no ports",
 			line: tsText + " (en0, proc ping:555:" + claudeUUID + ", out) IP 10.0.0.1 > 8.8.8.8: ICMP echo request, id 1, seq 1, length 64",
-			want: PacketEvent{
+			want: capture.PacketEvent{
 				ObservedAt:  tsTime,
 				Interface:   "en0",
 				Process:     "ping",
 				PID:         555,
 				ProcessUUID: claudeUUID,
-				Direction:   DirectionOut,
-				Protocol:    ICMP,
+				Direction:   capture.DirectionOut,
+				Protocol:    capture.ICMP,
 				Src:         addrOnly("10.0.0.1"),
 				Dst:         addrOnly("8.8.8.8"),
 				Length:      64,
@@ -264,14 +265,14 @@ func TestParseTcpdumpLine(t *testing.T) {
 		{
 			name: "ESP from the VPN client",
 			line: tsText + " (en0, proc ch.protonvpn.mac:65632:" + protonUUID + ", out) IP 192.168.178.167 > 62.169.136.103: ESP(spi=0x00001234,seq=0x7), length 108",
-			want: PacketEvent{
+			want: capture.PacketEvent{
 				ObservedAt:  tsTime,
 				Interface:   "en0",
 				Process:     "ch.protonvpn.mac",
 				PID:         65632,
 				ProcessUUID: protonUUID,
-				Direction:   DirectionOut,
-				Protocol:    Protocol("ESP"),
+				Direction:   capture.DirectionOut,
+				Protocol:    capture.Protocol("ESP"),
 				Src:         addrOnly("192.168.178.167"),
 				Dst:         addrOnly("62.169.136.103"),
 				Length:      108,
@@ -280,10 +281,10 @@ func TestParseTcpdumpLine(t *testing.T) {
 		{
 			name: "unrecognised protocol keeps the trailing length",
 			line: tsText + " (en0, out) IP 10.0.0.1 > 10.0.0.2: GREv0, length 100",
-			want: PacketEvent{
+			want: capture.PacketEvent{
 				ObservedAt: tsTime,
 				Interface:  "en0",
-				Direction:  DirectionOut,
+				Direction:  capture.DirectionOut,
 				Src:        addrOnly("10.0.0.1"),
 				Dst:        addrOnly("10.0.0.2"),
 				Length:     100,
@@ -292,11 +293,11 @@ func TestParseTcpdumpLine(t *testing.T) {
 		{
 			name: "negative length is not a length",
 			line: tsText + " (en0, out) IP 10.0.0.1.5 > 10.0.0.2.6: tcp -5",
-			want: PacketEvent{
+			want: capture.PacketEvent{
 				ObservedAt: tsTime,
 				Interface:  "en0",
-				Direction:  DirectionOut,
-				Protocol:   TCP,
+				Direction:  capture.DirectionOut,
+				Protocol:   capture.TCP,
 				Src:        ap("10.0.0.1:5"),
 				Dst:        ap("10.0.0.2:6"),
 				Length:     0,
@@ -305,9 +306,9 @@ func TestParseTcpdumpLine(t *testing.T) {
 		{
 			name: "no metadata block at all",
 			line: tsText + " IP 10.2.0.2.53001 > 1.1.1.1.53: UDP, length 29",
-			want: PacketEvent{
+			want: capture.PacketEvent{
 				ObservedAt: tsTime,
-				Protocol:   UDP,
+				Protocol:   capture.UDP,
 				Src:        ap("10.2.0.2:53001"),
 				Dst:        ap("1.1.1.1:53"),
 				Length:     29,
@@ -316,13 +317,13 @@ func TestParseTcpdumpLine(t *testing.T) {
 		{
 			name: "no direction field",
 			line: tsText + " (utun6, proc claude:1084:" + claudeUUID + ") IP 10.2.0.2.63352 > 160.79.104.10.443: tcp 0",
-			want: PacketEvent{
+			want: capture.PacketEvent{
 				ObservedAt:  tsTime,
 				Interface:   "utun6",
 				Process:     "claude",
 				PID:         1084,
 				ProcessUUID: claudeUUID,
-				Protocol:    TCP,
+				Protocol:    capture.TCP,
 				Src:         ap("10.2.0.2:63352"),
 				Dst:         ap("160.79.104.10:443"),
 			},
@@ -330,11 +331,11 @@ func TestParseTcpdumpLine(t *testing.T) {
 		{
 			name: "non-numeric PID drops the process, keeps the packet",
 			line: tsText + " (utun6, proc claude:abc:" + claudeUUID + ", out) IP 10.2.0.2.63352 > 160.79.104.10.443: tcp 5",
-			want: PacketEvent{
+			want: capture.PacketEvent{
 				ObservedAt: tsTime,
 				Interface:  "utun6",
-				Direction:  DirectionOut,
-				Protocol:   TCP,
+				Direction:  capture.DirectionOut,
+				Protocol:   capture.TCP,
 				Src:        ap("10.2.0.2:63352"),
 				Dst:        ap("160.79.104.10:443"),
 				Length:     5,
@@ -343,11 +344,11 @@ func TestParseTcpdumpLine(t *testing.T) {
 		{
 			name: "PID above uint32 drops the process, keeps the packet",
 			line: tsText + " (utun6, proc claude:4294967296:" + claudeUUID + ", out) IP 10.2.0.2.63352 > 160.79.104.10.443: tcp 5",
-			want: PacketEvent{
+			want: capture.PacketEvent{
 				ObservedAt: tsTime,
 				Interface:  "utun6",
-				Direction:  DirectionOut,
-				Protocol:   TCP,
+				Direction:  capture.DirectionOut,
+				Protocol:   capture.TCP,
 				Src:        ap("10.2.0.2:63352"),
 				Dst:        ap("160.79.104.10:443"),
 				Length:     5,
@@ -427,7 +428,7 @@ func FuzzParseTcpdumpLine(f *testing.F) {
 		if !got.Src.Addr().IsValid() || !got.Dst.Addr().IsValid() {
 			t.Errorf("ok event without valid addresses: %q -> %+v", line, got)
 		}
-		if got.Direction != "" && got.Direction != DirectionIn && got.Direction != DirectionOut {
+		if got.Direction != "" && got.Direction != capture.DirectionIn && got.Direction != capture.DirectionOut {
 			t.Errorf("unexpected direction %q from %q", got.Direction, line)
 		}
 		if got.Length < 0 {
@@ -436,7 +437,7 @@ func FuzzParseTcpdumpLine(f *testing.F) {
 	})
 }
 
-func assertPacketEvent(t *testing.T, exp, act PacketEvent) {
+func assertPacketEvent(t *testing.T, exp, act capture.PacketEvent) {
 	t.Helper()
 
 	if !act.ObservedAt.Equal(exp.ObservedAt) {

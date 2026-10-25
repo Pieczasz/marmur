@@ -1,4 +1,4 @@
-package collector
+package tcpdump
 
 import (
 	"errors"
@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"testing/iotest"
+
+	"github.com/Pieczasz/marmur/internal/capture"
 )
 
 const (
@@ -14,10 +16,10 @@ const (
 	streamUDP = tsText + " (en0, proc ch.protonvpn.mac:65632:" + protonUUID + ", out) IP 192.168.178.167.62125 > 62.169.136.103.500: UDP, length 80"
 )
 
-func collect(t *testing.T, r io.Reader) ([]PacketEvent, int, error) {
+func collect(t *testing.T, r io.Reader) ([]capture.PacketEvent, int, error) {
 	t.Helper()
-	var got []PacketEvent
-	skipped, err := readPackets(r, func(ev PacketEvent) { got = append(got, ev) })
+	var got []capture.PacketEvent
+	skipped, err := readPackets(r, func(ev capture.PacketEvent) { got = append(got, ev) })
 	return got, skipped, err
 }
 
@@ -45,8 +47,8 @@ func TestReadPacketsMixedOutput(t *testing.T) {
 	}
 
 	wantLengths := []int{0, 279, 80}
-	wantDirs := []Direction{DirectionOut, DirectionIn, DirectionOut}
-	wantProtos := []Protocol{TCP, TCP, UDP}
+	wantDirs := []capture.Direction{capture.DirectionOut, capture.DirectionIn, capture.DirectionOut}
+	wantProtos := []capture.Protocol{capture.TCP, capture.TCP, capture.UDP}
 	for i, ev := range got {
 		if ev.Length != wantLengths[i] || ev.Direction != wantDirs[i] || ev.Protocol != wantProtos[i] {
 			t.Errorf("[%d] events out of order or wrong: got %+v", i, ev)
@@ -91,7 +93,7 @@ func TestReadPacketsLongLineDoesNotStopReading(t *testing.T) {
 	if skipped != 1 {
 		t.Errorf("skipped: expected 1, got %d", skipped)
 	}
-	if got[1].Protocol != UDP {
+	if got[1].Protocol != capture.UDP {
 		t.Errorf("event after the long line parsed wrong: %+v", got[1])
 	}
 }

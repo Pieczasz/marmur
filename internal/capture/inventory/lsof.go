@@ -1,4 +1,4 @@
-package collector
+package inventory
 
 import (
 	"bufio"
@@ -10,77 +10,41 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Pieczasz/marmur/internal/capture"
 )
 
-type Protocol string
+// LsofSensor implements capture.SocketSensor with lsof.
+type LsofSensor struct{}
 
-const (
-	TCP    Protocol = "TCP"
-	UDP    Protocol = "UDP"
-	ICMP   Protocol = "ICMP"
-	ICMPv6 Protocol = "ICMPV6"
-	ESP    Protocol = "ESP"
-)
+var _ capture.SocketSensor = LsofSensor{}
 
-type TCPState string
-
-const (
-	StateEstablished TCPState = "ESTABLISHED"
-	StateListen      TCPState = "LISTEN"
-	StateCloseWait   TCPState = "CLOSE_WAIT"
-	StateTimeWait    TCPState = "TIME_WAIT"
-	StateSynSent     TCPState = "SYN_SENT"
-	StateNone        TCPState = "" // For UDP / ICMP
-)
-
-type SocketEndpoint struct {
-	Addr       netip.Addr
-	Port       uint16
-	IsWildcard bool
-}
-
-type SocketEvent struct {
-	ObservedAt time.Time `json:"observed_at"`
-
-	Command string `json:"command"`
-	PID     uint32 `json:"pid"`
-	User    string `json:"user"`
-
-	FileDescriptor uint32 `json:"file_descriptor"`
-	AccessMode     rune   `json:"access_mode"`
-
-	Protocol Protocol `json:"protocol"`
-	TCPState TCPState `json:"tcp_state"`
-
-	// For now, we don't need that, it's a hexadecimal kernel address that could be correlated with
-	// raw kernel dumps or XNU source debugging.
-	// Device string `json:"device,omitempty"`
-
-	Local  SocketEndpoint  `json:"local"`
-	Remote *SocketEndpoint `json:"remote,omitempty"`
-}
-
-func (e *SocketEvent) IsIPv4() bool {
-	return e.Local.Addr.Is4() || (e.Remote != nil && e.Remote.Addr.Is4())
-}
-
-func (e *SocketEvent) IsIPv6() bool {
-	return e.Local.Addr.Is6() || (e.Remote != nil && e.Remote.Addr.Is6())
-}
-
-// CollectSockets uses lsof to get all socket events running on this machine.
-// The lsof command is run with the flags below:
-// p (PID), c (command), u (user), f (FD), P (protocol), T (state), n (endpoints)
-func CollectSockets(ctx context.Context) ([]SocketEvent, error) {
-	cmd := exec.CommandContext(ctx, "lsof", "-i", "-n", "-P", "-F", "pcufPTn")
-	out, err := cmd.Output()
+func (LsofSensor) Collect(ctx context.Context, emit func(capture.SocketEvent)) (capture.SocketSummary, error) {
+	n, err := collectSockets(ctx, emit)
 	if err != nil {
-		return nil, fmt.Errorf("lsof exec failed %w", err)
+		return capture.SocketSummary{}, err
+	}
+	return capture.SocketSummary{Emitted: n}, nil
+}
+
+func collectSockets(ctx context.Context, emit func(capture.SocketEvent)) (int, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "lsof", "-i", "-n", "-P", "-F", "pcufPTn")
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return 0, fmt.Errorf("lsof: stdout pipe: %w", err)
+	}
+
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Start(); err != nil {
+		return 0, fmt.Errorf("lsof: start: %w", err)
 	}
 
 	parser := newLSOFParser(time.Now().UTC())
-	scanner := bufio.NewScanner(bytes.NewReader(out))
-
+	scanner := bufio.NewScanner(stdout)
 	for scanner.Scan() {
 		currentLine := scanner.Text()
 		if len(currentLine) < 2 {
@@ -89,23 +53,43 @@ func CollectSockets(ctx context.Context) ([]SocketEvent, error) {
 
 		flag := currentLine[0]
 		val := currentLine[1:]
-
 		parser.parseFlag(flag, val)
 	}
+	readErr := scanner.Err()
+	if readErr != nil {
+		_ = cmd.Process.Kill()
+	}
 
-	return parser.finish(), nil
+	waitErr := cmd.Wait()
+	switch {
+	case readErr != nil:
+		return 0, fmt.Errorf("lsof: read: %w", readErr)
+	case ctx.Err() != nil:
+		return 0, ctx.Err()
+	case waitErr != nil:
+		msg := strings.TrimSpace(stderr.String())
+		if msg != "" {
+			return 0, fmt.Errorf("lsof: %w: %s", waitErr, msg)
+		}
+		return 0, fmt.Errorf("lsof: %w", waitErr)
+	}
 
+	events := parser.finish()
+	for _, ev := range events {
+		emit(ev)
+	}
+	return len(events), nil
 }
 
 type lsofParser struct {
 	now time.Time
 
-	currentPID   uint32
 	currentCmd   string
 	currentUser  string
-	currentEvent *SocketEvent
+	currentEvent *capture.SocketEvent
+	events       []capture.SocketEvent
 
-	events []SocketEvent
+	currentPID uint32
 }
 
 func newLSOFParser(now time.Time) *lsofParser {
@@ -144,7 +128,7 @@ func (p *lsofParser) parseProcess(val string) {
 
 func (p *lsofParser) parseFileDescriptor(val string) {
 	p.flush()
-	ev := &SocketEvent{
+	ev := &capture.SocketEvent{
 		ObservedAt: p.now,
 		Command:    p.currentCmd,
 		PID:        p.currentPID,
@@ -159,7 +143,7 @@ func (p *lsofParser) parseFileDescriptor(val string) {
 	num := val
 	last := val[len(val)-1]
 	if last == 'u' || last == 'r' || last == 'w' {
-		ev.AccessMode = rune(last)
+		ev.AccessMode = string(last)
 		num = val[:len(val)-1]
 	}
 	fd, err := strconv.ParseUint(num, 10, 32)
@@ -175,7 +159,7 @@ func (p *lsofParser) parseProtocol(val string) {
 		return
 	}
 
-	p.currentEvent.Protocol = Protocol(strings.ToUpper(val))
+	p.currentEvent.Protocol = capture.Protocol(strings.ToUpper(val))
 }
 
 func (p *lsofParser) parseState(val string) {
@@ -187,7 +171,7 @@ func (p *lsofParser) parseState(val string) {
 	if !ok {
 		return
 	}
-	p.currentEvent.TCPState = TCPState(state)
+	p.currentEvent.TCPState = capture.TCPState(state)
 }
 
 func (p *lsofParser) parseEndpoints(val string) {
@@ -205,8 +189,8 @@ func (p *lsofParser) parseEndpoints(val string) {
 	p.currentEvent.Remote = &r
 }
 
-func parseEndpoint(raw string) SocketEndpoint {
-	var ep SocketEndpoint
+func parseEndpoint(raw string) capture.SocketEndpoint {
+	var ep capture.SocketEndpoint
 
 	colon := strings.LastIndex(raw, ":")
 	if colon < 0 {
@@ -226,7 +210,7 @@ func parseEndpoint(raw string) SocketEndpoint {
 	if port == "*" {
 		return ep
 	}
-	n, err := strconv.ParseUint(port, 10, 32)
+	n, err := strconv.ParseUint(port, 10, 16)
 	if err != nil {
 		return ep
 	}
@@ -234,7 +218,7 @@ func parseEndpoint(raw string) SocketEndpoint {
 	return ep
 }
 
-func (p *lsofParser) finish() []SocketEvent {
+func (p *lsofParser) finish() []capture.SocketEvent {
 	p.flush()
 	return p.events
 }

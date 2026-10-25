@@ -1,20 +1,18 @@
-# whotracksme (working name)
+# marmur
 
 A local, privacy-first network monitor for your own Mac.
 
 It answers one question: **which applications talk to whom, how much, and what is new or unusual?** Every answer comes with evidence. The monitor itself never becomes a second surveillance dataset.
 
-> **The name will change.** "WhoTracks.Me" is Ghostery's tracker-transparency project.
-
 ## What it does
 
 The monitor is built in three layers. Only the first is always on.
 
-| Layer | What it does | Default |
-|---|---|---|
-| **Observe** | Per-app flows (who, where, how much, when), destination names from DNS and TLS, owners and tracker/telemetry labels from downloaded lists, and explainable findings | always on, metadata only |
-| **Inspect** | Decrypt one app's traffic for a short session and check whether *your* personal data appears in its requests, using planted canary values | off; one app at a time |
-| **Enforce** | Suggest blocks for what you found. A local DNS resolver, LuLu or mitmproxy applies them after you approve | off; nothing blocks automatically |
+| Layer       | What it does                                                                                                                                                        | Default                           |
+|-------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------|
+| **Observe** | Per-app flows (who, where, how much, when), destination names from DNS and TLS, owners and tracker/telemetry labels from downloaded lists, and explainable findings | always on, metadata only          |
+| **Inspect** | Decrypt one app's traffic for a short session and check whether *your* personal data appears in its requests, using planted canary values                           | off; one app at a time            |
+| **Enforce** | Suggest blocks for what you found. A local DNS resolver, LuLu or mitmproxy applies them after you approve                                                           | off; nothing blocks automatically |
 
 ## What it never does
 
@@ -52,7 +50,7 @@ go test ./...
 ```
 
 ```bash
-go test ./internal/collector -run '^$' -fuzz FuzzDecodePktap -fuzztime 30s
+go test ./internal/capture/darwin -run '^$' -fuzz FuzzDecodePktap -fuzztime 30s
 ```
 
 Tests never need root or live traffic. The collector benchmark in `scratch/pktapbench` does; it asks for your password and uses loopback traffic only:

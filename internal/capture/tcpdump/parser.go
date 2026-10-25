@@ -1,57 +1,33 @@
-package collector
+package tcpdump
 
 import (
 	"net/netip"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Pieczasz/marmur/internal/capture"
 )
-
-type Direction string
-
-const (
-	DirectionIn  Direction = "in"
-	DirectionOut Direction = "out"
-)
-
-type PacketEvent struct {
-	ObservedAt  time.Time // UTC
-	Interface   string    // "utun6", "en0", "" if absent
-	Process     string
-	PID         uint32
-	ProcessUUID string
-	Direction   Direction
-	Protocol    Protocol
-	Src, Dst    netip.AddrPort // port 0 for ICMP/ESP
-	Length      int
-
-	// PKTAP specific
-	EffectiveProcess string
-	EffectivePID     uint32
-	EffectiveUUID    string
-	Delegated        bool
-	FlowID           uint32
-}
 
 // parseTcpdumpLine parses one stdout line of `tcpdump -i pktap,all -n -q -tt -l -k INPDU`.
-// It returns false for anything that is not an IPv4/IPv6 packet line.
-func parseTcpdumpLine(line string) (PacketEvent, bool) {
+// It returns false (not ok) for anything that is not an IPv4/IPv6 packet line.
+func parseTcpdumpLine(line string) (capture.PacketEvent, bool) {
 	timestampString, rest, ok := strings.Cut(line, " ")
 	if !ok {
-		return PacketEvent{}, false
+		return capture.PacketEvent{}, false
 	}
 
 	timestamp, ok := parseTimestamp(timestampString)
 	if !ok {
-		return PacketEvent{}, false
+		return capture.PacketEvent{}, false
 	}
 
-	ev := PacketEvent{ObservedAt: timestamp}
+	ev := capture.PacketEvent{ObservedAt: timestamp}
 
 	if strings.HasPrefix(rest, "(") {
 		end := strings.Index(rest, ") IP")
 		if end < 0 {
-			return PacketEvent{}, false
+			return capture.PacketEvent{}, false
 		}
 
 		block := rest[1:end]
@@ -64,23 +40,23 @@ func parseTcpdumpLine(line string) (PacketEvent, bool) {
 	} else if r, ok := strings.CutPrefix(rest, "IP "); ok {
 		rest = r
 	} else {
-		return PacketEvent{}, false
+		return capture.PacketEvent{}, false
 	}
 
 	src, after, ok := strings.Cut(rest, " > ")
 	if !ok {
-		return PacketEvent{}, false
+		return capture.PacketEvent{}, false
 	}
 	dst, tail, ok := strings.Cut(after, ": ")
 	if !ok {
-		return PacketEvent{}, false
+		return capture.PacketEvent{}, false
 	}
 
 	if ev.Src, ok = parseHostPort(src); !ok {
-		return PacketEvent{}, false
+		return capture.PacketEvent{}, false
 	}
 	if ev.Dst, ok = parseHostPort(dst); !ok {
-		return PacketEvent{}, false
+		return capture.PacketEvent{}, false
 	}
 
 	parseTail(&ev, tail)
@@ -107,11 +83,11 @@ func parseTimestamp(s string) (time.Time, bool) {
 	return time.Unix(sec, usec*1000).UTC(), true
 }
 
-func parseMetadata(ev *PacketEvent, block string) {
+func parseMetadata(ev *capture.PacketEvent, block string) {
 	for i, field := range strings.Split(block, ", ") {
 		switch {
 		case field == "in" || field == "out":
-			ev.Direction = Direction(field)
+			ev.Direction = capture.Direction(field)
 		case strings.HasPrefix(field, "proc "):
 			parseProc(ev, strings.TrimPrefix(field, "proc "))
 		case i == 0 && !strings.Contains(field, " "):
@@ -120,7 +96,7 @@ func parseMetadata(ev *PacketEvent, block string) {
 	}
 }
 
-func parseProc(ev *PacketEvent, val string) {
+func parseProc(ev *capture.PacketEvent, val string) {
 	parts := strings.Split(val, ":")
 	var uuid string
 
@@ -165,22 +141,22 @@ func parseHostPort(s string) (netip.AddrPort, bool) {
 	return netip.AddrPortFrom(addr, uint16(port)), true
 }
 
-func parseTail(ev *PacketEvent, tail string) {
+func parseTail(ev *capture.PacketEvent, tail string) {
 	if n, ok := strings.CutPrefix(tail, "tcp "); ok {
-		ev.Protocol = TCP
+		ev.Protocol = capture.TCP
 		ev.Length = parseLength(n)
 		return
 	}
 
 	switch {
 	case strings.HasPrefix(tail, "UDP,"):
-		ev.Protocol = UDP
+		ev.Protocol = capture.UDP
 	case strings.HasPrefix(tail, "ICMP6"):
-		ev.Protocol = ICMPv6
+		ev.Protocol = capture.ICMPv6
 	case strings.HasPrefix(tail, "ICMP"):
-		ev.Protocol = ICMP
+		ev.Protocol = capture.ICMP
 	case strings.HasPrefix(tail, "ESP("):
-		ev.Protocol = ESP
+		ev.Protocol = capture.ESP
 	}
 
 	if i := strings.LastIndex(tail, "length "); i >= 0 {

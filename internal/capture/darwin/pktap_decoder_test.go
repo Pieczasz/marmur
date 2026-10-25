@@ -1,4 +1,6 @@
-package collector
+//go:build darwin
+
+package darwin
 
 import (
 	"encoding/binary"
@@ -6,6 +8,8 @@ import (
 	"net/netip"
 	"testing"
 	"time"
+
+	"github.com/Pieczasz/marmur/internal/capture"
 )
 
 const (
@@ -116,28 +120,28 @@ func TestDecodePktap(t *testing.T) {
 	tests := []struct {
 		name string
 		data []byte
-		want PacketEvent
+		want capture.PacketEvent
 	}{
 		{
 			name: "en0 out TCP with options, all process fields",
 			data: fxRecord{dlt: 1, ifname: "en0", flags: fxFlagOut | 0x20000, pre: 14, pid: 1084, comm: "claude",
 				epid: 1084, ecomm: "claude", flowid: 0xbef45f65, uuid: fxUUID}.
 				build(fxEthernet, fxIPv4("10.2.0.2", "160.79.104.10", 6, fxTCP(63352, 443, 32), 20+32+39)),
-			want: PacketEvent{
-				ObservedAt: fxTS.UTC(), Interface: "en0", Direction: DirectionOut,
+			want: capture.PacketEvent{
+				ObservedAt: fxTS.UTC(), Interface: "en0", Direction: capture.DirectionOut,
 				Process: "claude", PID: 1084, ProcessUUID: fxUUIDText,
 				EffectiveProcess: "claude", EffectivePID: 1084, FlowID: 0xbef45f65,
-				Protocol: TCP, Src: ap("10.2.0.2:63352"), Dst: ap("160.79.104.10:443"), Length: 39,
+				Protocol: capture.TCP, Src: ap("10.2.0.2:63352"), Dst: ap("160.79.104.10:443"), Length: 39,
 			},
 		},
 		{
 			name: "utun in UDP after a 4-byte DLT_NULL header",
 			data: fxRecord{dlt: 0, ifname: "utun6", flags: fxFlagIn, pre: 4, pid: 98087, comm: "claude", uuid: fxUUID}.
 				build(fxNullLink, fxIPv4("160.79.104.10", "10.2.0.2", 17, fxUDP(443, 51690, 448), 20+8+448)),
-			want: PacketEvent{
-				ObservedAt: fxTS.UTC(), Interface: "utun6", Direction: DirectionIn,
+			want: capture.PacketEvent{
+				ObservedAt: fxTS.UTC(), Interface: "utun6", Direction: capture.DirectionIn,
 				Process: "claude", PID: 98087, ProcessUUID: fxUUIDText,
-				Protocol: UDP, Src: ap("160.79.104.10:443"), Dst: ap("10.2.0.2:51690"), Length: 448,
+				Protocol: capture.UDP, Src: ap("160.79.104.10:443"), Dst: ap("10.2.0.2:51690"), Length: 448,
 			},
 		},
 		{
@@ -145,78 +149,78 @@ func TestDecodePktap(t *testing.T) {
 			data: fxRecord{dlt: 0, ifname: "utun6", flags: fxFlagOut | fxFlagDelegated, pre: 4,
 				pid: 688, comm: "mDNSResponder", uuid: fxUUID, epid: 3279, ecomm: "curl", euuid: fxEUUID}.
 				build(fxNullLink, fxIPv4("10.2.0.2", "10.2.0.1", 17, fxUDP(55615, 53, 38), 20+8+38)),
-			want: PacketEvent{
-				ObservedAt: fxTS.UTC(), Interface: "utun6", Direction: DirectionOut,
+			want: capture.PacketEvent{
+				ObservedAt: fxTS.UTC(), Interface: "utun6", Direction: capture.DirectionOut,
 				Process: "mDNSResponder", PID: 688, ProcessUUID: fxUUIDText,
 				EffectiveProcess: "curl", EffectivePID: 3279, EffectiveUUID: fxEUUIDText, Delegated: true,
-				Protocol: UDP, Src: ap("10.2.0.2:55615"), Dst: ap("10.2.0.1:53"), Length: 38,
+				Protocol: capture.UDP, Src: ap("10.2.0.2:55615"), Dst: ap("10.2.0.1:53"), Length: 38,
 			},
 		},
 		{
 			name: "pid and epid -1 mean no process, packet still returned",
 			data: fxRecord{dlt: 1, ifname: "en0", flags: fxFlagIn, pre: 14, pid: fxNoProcess, epid: fxNoProcess, uuid: fxUUID}.
 				build(fxEthernet, fxIPv6("fe80::c6eb:39ff:fe51:14f2", "ff02::1", 58, make([]byte, 8), 136)),
-			want: PacketEvent{
-				ObservedAt: fxTS.UTC(), Interface: "en0", Direction: DirectionIn,
-				Protocol: ICMPv6, Src: addrOnly("fe80::c6eb:39ff:fe51:14f2"), Dst: addrOnly("ff02::1"), Length: 136,
+			want: capture.PacketEvent{
+				ObservedAt: fxTS.UTC(), Interface: "en0", Direction: capture.DirectionIn,
+				Protocol: capture.ICMPv6, Src: addrOnly("fe80::c6eb:39ff:fe51:14f2"), Dst: addrOnly("ff02::1"), Length: 136,
 			},
 		},
 		{
 			name: "16-character name fills comm exactly",
 			data: fxRecord{dlt: 0, ifname: "utun6", flags: fxFlagIn, pre: 4, pid: 70007, comm: "Google Chrome He"}.
 				build(fxNullLink, fxIPv4("18.65.39.60", "10.2.0.2", 6, fxTCP(443, 55885, 32), 52)),
-			want: PacketEvent{
-				ObservedAt: fxTS.UTC(), Interface: "utun6", Direction: DirectionIn,
+			want: capture.PacketEvent{
+				ObservedAt: fxTS.UTC(), Interface: "utun6", Direction: capture.DirectionIn,
 				Process: "Google Chrome He", PID: 70007,
-				Protocol: TCP, Src: ap("18.65.39.60:443"), Dst: ap("10.2.0.2:55885"), Length: 0,
+				Protocol: capture.TCP, Src: ap("18.65.39.60:443"), Dst: ap("10.2.0.2:55885"), Length: 0,
 			},
 		},
 		{
 			name: "snaplen cut payload: length still from the IP header",
 			data: fxRecord{dlt: 1, ifname: "en0", flags: fxFlagIn, pre: 14, pid: 59292, comm: "zen"}.
 				build(fxEthernet, fxIPv4("34.107.243.93", "192.168.178.167", 6, fxTCP(443, 55686, 20), 20+20+1400)),
-			want: PacketEvent{
-				ObservedAt: fxTS.UTC(), Interface: "en0", Direction: DirectionIn,
+			want: capture.PacketEvent{
+				ObservedAt: fxTS.UTC(), Interface: "en0", Direction: capture.DirectionIn,
 				Process: "zen", PID: 59292,
-				Protocol: TCP, Src: ap("34.107.243.93:443"), Dst: ap("192.168.178.167:55686"), Length: 1400,
+				Protocol: capture.TCP, Src: ap("34.107.243.93:443"), Dst: ap("192.168.178.167:55686"), Length: 1400,
 			},
 		},
 		{
 			name: "IPv6 UDP on loopback",
 			data: fxRecord{dlt: 0, ifname: "lo0", flags: fxFlagOut, pre: 4, pid: 688, comm: "mDNSResponder"}.
 				build(fxNullLink, fxIPv6("fe80::a8ab:c9ff:fe4f:79de", "ff02::fb", 17, fxUDP(5353, 5353, 63), 8+63)),
-			want: PacketEvent{
-				ObservedAt: fxTS.UTC(), Interface: "lo0", Direction: DirectionOut,
+			want: capture.PacketEvent{
+				ObservedAt: fxTS.UTC(), Interface: "lo0", Direction: capture.DirectionOut,
 				Process: "mDNSResponder", PID: 688,
-				Protocol: UDP, Src: ap("[fe80::a8ab:c9ff:fe4f:79de]:5353"), Dst: ap("[ff02::fb]:5353"), Length: 63,
+				Protocol: capture.UDP, Src: ap("[fe80::a8ab:c9ff:fe4f:79de]:5353"), Dst: ap("[ff02::fb]:5353"), Length: 63,
 			},
 		},
 		{
 			name: "ICMP has no ports, length is the IP payload",
 			data: fxRecord{dlt: 1, ifname: "en0", flags: fxFlagOut, pre: 14, pid: 555, comm: "ping"}.
 				build(fxEthernet, fxIPv4("10.0.0.1", "8.8.8.8", 1, make([]byte, 8), 20+64)),
-			want: PacketEvent{
-				ObservedAt: fxTS.UTC(), Interface: "en0", Direction: DirectionOut,
+			want: capture.PacketEvent{
+				ObservedAt: fxTS.UTC(), Interface: "en0", Direction: capture.DirectionOut,
 				Process: "ping", PID: 555,
-				Protocol: ICMP, Src: addrOnly("10.0.0.1"), Dst: addrOnly("8.8.8.8"), Length: 64,
+				Protocol: capture.ICMP, Src: addrOnly("10.0.0.1"), Dst: addrOnly("8.8.8.8"), Length: 64,
 			},
 		},
 		{
 			name: "ESP from the VPN client",
 			data: fxRecord{dlt: 1, ifname: "en0", flags: fxFlagOut, pre: 14, pid: 65632, comm: "ch.protonvpn.mac"}.
 				build(fxEthernet, fxIPv4("192.168.178.167", "62.169.136.103", 50, make([]byte, 8), 20+108)),
-			want: PacketEvent{
-				ObservedAt: fxTS.UTC(), Interface: "en0", Direction: DirectionOut,
+			want: capture.PacketEvent{
+				ObservedAt: fxTS.UTC(), Interface: "en0", Direction: capture.DirectionOut,
 				Process: "ch.protonvpn.mac", PID: 65632,
-				Protocol: ESP, Src: addrOnly("192.168.178.167"), Dst: addrOnly("62.169.136.103"), Length: 108,
+				Protocol: capture.ESP, Src: addrOnly("192.168.178.167"), Dst: addrOnly("62.169.136.103"), Length: 108,
 			},
 		},
 		{
 			name: "IPv6 hop-by-hop header is not walked: unknown protocol, IPv6 payload length",
 			data: fxRecord{dlt: 1, ifname: "en0", flags: fxFlagOut, pre: 14}.
 				build(fxEthernet, fxIPv6("fe80::1", "ff02::16", 0, make([]byte, 8), 36)),
-			want: PacketEvent{
-				ObservedAt: fxTS.UTC(), Interface: "en0", Direction: DirectionOut,
+			want: capture.PacketEvent{
+				ObservedAt: fxTS.UTC(), Interface: "en0", Direction: capture.DirectionOut,
 				Src: addrOnly("fe80::1"), Dst: addrOnly("ff02::16"), Length: 36,
 			},
 		},
@@ -224,10 +228,10 @@ func TestDecodePktap(t *testing.T) {
 			name: "IP length smaller than the headers never gives a negative length",
 			data: fxRecord{dlt: 1, ifname: "en0", flags: fxFlagOut, pre: 14, pid: 1, comm: "a"}.
 				build(fxEthernet, fxIPv4("10.0.0.1", "10.0.0.2", 6, fxTCP(1, 2, 20), 0)),
-			want: PacketEvent{
-				ObservedAt: fxTS.UTC(), Interface: "en0", Direction: DirectionOut,
+			want: capture.PacketEvent{
+				ObservedAt: fxTS.UTC(), Interface: "en0", Direction: capture.DirectionOut,
 				Process: "a", PID: 1,
-				Protocol: TCP, Src: ap("10.0.0.1:1"), Dst: ap("10.0.0.2:2"), Length: 0,
+				Protocol: capture.TCP, Src: ap("10.0.0.1:1"), Dst: ap("10.0.0.2:2"), Length: 0,
 			},
 		},
 	}
@@ -296,13 +300,13 @@ func FuzzDecodePktap(f *testing.F) {
 		if ev.Length < 0 {
 			t.Errorf("negative length %d", ev.Length)
 		}
-		if ev.Direction != "" && ev.Direction != DirectionIn && ev.Direction != DirectionOut {
+		if ev.Direction != "" && ev.Direction != capture.DirectionIn && ev.Direction != capture.DirectionOut {
 			t.Errorf("unexpected direction %q", ev.Direction)
 		}
 	})
 }
 
-func assertPktapExtras(t *testing.T, exp, act PacketEvent) {
+func assertPktapExtras(t *testing.T, exp, act capture.PacketEvent) {
 	t.Helper()
 	if act.EffectiveProcess != exp.EffectiveProcess {
 		t.Errorf("EffectiveProcess mismatch: expected %q, got %q", exp.EffectiveProcess, act.EffectiveProcess)
@@ -318,5 +322,51 @@ func assertPktapExtras(t *testing.T, exp, act PacketEvent) {
 	}
 	if act.FlowID != exp.FlowID {
 		t.Errorf("FlowID mismatch: expected %#x, got %#x", exp.FlowID, act.FlowID)
+	}
+}
+
+func ap(s string) netip.AddrPort {
+	return netip.MustParseAddrPort(s)
+}
+
+func addrOnly(s string) netip.AddrPort {
+	return netip.AddrPortFrom(netip.MustParseAddr(s), 0)
+}
+
+func assertPacketEvent(t *testing.T, exp, act capture.PacketEvent) {
+	t.Helper()
+
+	if !act.ObservedAt.Equal(exp.ObservedAt) {
+		t.Errorf("ObservedAt mismatch: expected %v, got %v", exp.ObservedAt, act.ObservedAt)
+	}
+	if act.ObservedAt.Location() != time.UTC {
+		t.Errorf("ObservedAt must be UTC, got %v", act.ObservedAt.Location())
+	}
+	if act.Interface != exp.Interface {
+		t.Errorf("Interface mismatch: expected %q, got %q", exp.Interface, act.Interface)
+	}
+	if act.Process != exp.Process {
+		t.Errorf("Process mismatch: expected %q, got %q", exp.Process, act.Process)
+	}
+	if act.PID != exp.PID {
+		t.Errorf("PID mismatch: expected %d, got %d", exp.PID, act.PID)
+	}
+	if act.ProcessUUID != exp.ProcessUUID {
+		t.Errorf("ProcessUUID mismatch: expected %q, got %q", exp.ProcessUUID, act.ProcessUUID)
+	}
+	if act.Direction != exp.Direction {
+		t.Errorf("Direction mismatch: expected %q, got %q", exp.Direction, act.Direction)
+	}
+	if act.Protocol != exp.Protocol {
+		t.Errorf("Protocol mismatch: expected %q, got %q", exp.Protocol, act.Protocol)
+	}
+	if act.Src != exp.Src {
+		t.Errorf("Src mismatch: expected %s, got %s", exp.Src, act.Src)
+	}
+	if act.Dst != exp.Dst {
+		t.Errorf("Dst mismatch: expected %s, got %s", exp.Dst, act.Dst)
+	}
+	if act.Length != exp.Length {
+		t.Errorf("Length mismatch: expected %d, got %d", exp.Length, act.Length)
 	}
 }
