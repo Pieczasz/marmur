@@ -12,7 +12,7 @@ type PacketSummary struct {
 	PacketsIfDropped int `json:"packets_if_dropped"`
 }
 
-// SocketSummary is the per-run result of a socket inventory sensor.
+// SocketSummary is the per-run result of a socket sensor.
 type SocketSummary struct {
 	Emitted int `json:"emitted"`
 }

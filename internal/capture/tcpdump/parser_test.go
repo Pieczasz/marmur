@@ -1,11 +1,12 @@
 package tcpdump
 
 import (
-	"github.com/Pieczasz/marmur/internal/capture"
 	"net/netip"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/Pieczasz/marmur/internal/capture"
 )
 
 const (

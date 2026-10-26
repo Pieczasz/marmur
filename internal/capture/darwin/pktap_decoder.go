@@ -204,6 +204,7 @@ func decodeTransport(ev *capture.PacketEvent, l4 []byte, payload int, src, dst n
 	}
 }
 
+// TODO: make this bit operations easier to understand, extract consts?
 func decodeTCP(ev *capture.PacketEvent, l4 []byte, src, dst netip.Addr) error {
 	if len(l4) < 13 {
 		return errTruncated

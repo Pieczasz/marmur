@@ -22,13 +22,13 @@ type fakeRead struct {
 }
 
 type fakeSource struct {
-	steps    []fakeRead
-	index    int
-	stats    *pcap.Stats
 	statsErr error
-	reuse    bool
-	buf      []byte
+	stats    *pcap.Stats
 	onRead   func(int)
+	steps    []fakeRead
+	buf      []byte
+	index    int
+	reuse    bool
 	closed   bool
 }
 

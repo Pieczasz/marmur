@@ -2,7 +2,8 @@
 
 A local, privacy-first network monitor for your own Mac.
 
-It answers one question: **which applications talk to whom, how much, and what is new or unusual?** Every answer comes with evidence. The monitor itself never becomes a second surveillance dataset.
+It answers one question: **which applications talk to whom, how much, and what is new or unusual?** Every answer comes
+with evidence. The monitor itself never becomes a second surveillance dataset.
 
 ## What it does
 
@@ -19,7 +20,8 @@ The monitor is built in three layers. Only the first is always on.
 - Store packet payloads or request bodies.
 - Send any destination, domain or hash to a third party; every list it uses is downloaded and used locally.
 - Watch anyone else's devices or network.
-- Reduce findings to a single "malicious %" score. Each finding is labelled privacy, security, unusual or policy, with its evidence and possible benign explanations.
+- Reduce findings to a single "malicious %" score. Each finding is labeled privacy, security, unusual or policy, with
+  its evidence and possible benign explanations.
 
 ## How it works
 
@@ -29,10 +31,15 @@ kernel PKTAP ──► capture helper (root, tiny) ──► monitor (your user)
  per packet        drops packet bytes               names · labels · findings
 ```
 
-- **Capture.** macOS tags every packet with its process (PKTAP). The monitor reads it in-process with [`gopacket`](https://github.com/gopacket/gopacket) and turns it into one-minute flows per application. `lsof` fills in listeners and idle sockets.
-- **Attribution.** Traffic a system daemon sends for an app (e.g. DNS lookups) is credited to that app. VPN traffic is counted once.
-- **Labels.** Owners, ASNs and tracker/telemetry categories come from downloaded datasets (iptoasn, HaGeZi, DuckDuckGo Tracker Radar, Spamhaus), each with its source and license.
-- **Findings.** Explainable rules (new destination, known tracker, upload spike, …) over each app's own baseline. ML only later, and only locally.
+- **Capture.** macOS tags every packet with its process (PKTAP). The monitor reads it in-process with [
+  `gopacket`](https://github.com/gopacket/gopacket) and turns it into one-minute flows per application. `lsof` fills in
+  listeners and idle sockets.
+- **Attribution.** Traffic a system daemon sends for an app (e.g. DNS lookups) is credited to that app. VPN traffic is
+  counted once.
+- **Labels.** Owners, ASNs and tracker/telemetry categories come from downloaded datasets (iptoasn, HaGeZi, DuckDuckGo
+  Tracker Radar, Spamhaus), each with its source and license.
+- **Findings.** Explainable rules (new destination, known tracker, upload spike, …) over each app's own baseline. ML
+  only later, and only locally.
 - **Interface.** A small web dashboard on 127.0.0.1, written with Go templates and HTMX.
 
 Written in Go. macOS first; Linux (eBPF) later behind the same model.
@@ -40,6 +47,7 @@ Written in Go. macOS first; Linux (eBPF) later behind the same model.
 ## Building and testing
 
 Requirements:
+
 - macOS with Apple's system libpcap
 - Go 1.27
 - cgo (for live capture)
@@ -53,7 +61,8 @@ go test ./...
 go test ./internal/capture/darwin -run '^$' -fuzz FuzzDecodePktap -fuzztime 30s
 ```
 
-Tests never need root or live traffic. The collector benchmark in `scratch/pktapbench` does; it asks for your password and uses loopback traffic only:
+Tests never need root or live traffic. The collector benchmark in `scratch/pktapbench` does; it asks for your password
+and uses loopback traffic only:
 
 ```bash
 ./scratch/pktapbench/run.sh

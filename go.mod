@@ -1,7 +1,7 @@
 module github.com/Pieczasz/marmur
 
-go 1.27.2
+go 1.27.3
 
 require github.com/gopacket/gopacket v1.7.4
 
-require golang.org/x/sys v0.45.0 // indirect
+require golang.org/x/sys v0.49.0 // indirect

@@ -60,15 +60,11 @@ func (PktapSensor) Collect(ctx context.Context, emit func(capture.PacketEvent)) 
 }
 
 func openPktap(cfg pktapConfig) (packetSource, error) {
-	inactive, err := pcap.NewInactiveHandle(cfg.device)
+	inactive, err := setupPCAPInactive(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("pktap: new inactive handle: %w", err)
+		return nil, err
 	}
 	defer inactive.CleanUp()
-
-	if err := setupInactive(cfg, inactive); err != nil {
-		return nil, fmt.Errorf("pktap: setup inactive: %w", err)
-	}
 
 	handle, err := inactive.Activate()
 	if err != nil {
@@ -83,23 +79,27 @@ func openPktap(cfg pktapConfig) (packetSource, error) {
 	return handle, nil
 }
 
-func setupInactive(cfg pktapConfig, inactive *pcap.InactiveHandle) error {
+func setupPCAPInactive(cfg pktapConfig) (*pcap.InactiveHandle, error) {
+	inactive, err := pcap.NewInactiveHandle(cfg.device)
+	if err != nil {
+		return nil, fmt.Errorf("pktap: new inactive handle: %w", err)
+	}
 	if err := inactive.SetSnapLen(cfg.snapLen); err != nil {
-		return fmt.Errorf("pktap: set snaplen: %w", err)
+		return nil, fmt.Errorf("pktap: set snaplen: %w", err)
 	}
 	if err := inactive.SetPromisc(cfg.promisc); err != nil {
-		return fmt.Errorf("pktap: set promisc: %w", err)
+		return nil, fmt.Errorf("pktap: set promisc: %w", err)
 	}
 	if err := inactive.SetTimeout(cfg.timeout); err != nil {
-		return fmt.Errorf("pktap: set timeout: %w", err)
+		return nil, fmt.Errorf("pktap: set timeout: %w", err)
 	}
 	if err := inactive.SetImmediateMode(cfg.immediate); err != nil {
-		return fmt.Errorf("pktap: set immediate mode: %w", err)
+		return nil, fmt.Errorf("pktap: set immediate mode: %w", err)
 	}
 	if err := inactive.SetWantPktap(cfg.wantPktap); err != nil {
-		return fmt.Errorf("pktap: set want pktap: %w", err)
+		return nil, fmt.Errorf("pktap: set want pktap: %w", err)
 	}
-	return nil
+	return inactive, nil
 }
 
 func validateLinkType(linkType layers.LinkType) error {
@@ -120,7 +120,7 @@ func collectPacketsFrom(ctx context.Context, open func() (packetSource, error), 
 	for ctx.Err() == nil {
 		data, ci, err := src.ZeroCopyReadPacketData()
 		if err != nil {
-			if err == pcap.NextErrorTimeoutExpired {
+			if errors.Is(err, pcap.NextErrorTimeoutExpired) {
 				continue
 			}
 			if ctx.Err() != nil {

@@ -31,7 +31,6 @@ const (
 	fxEUUIDText = "1feaf41c-e9af-39ee-86e4-c387edc5ed44"
 )
 
-// fxRecord builds a pktap_header. Zero values mean: record type 1, length 156.
 type fxRecord struct {
 	recType, hdrLen uint32
 	dlt             uint32
