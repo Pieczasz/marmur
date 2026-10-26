@@ -38,20 +38,20 @@ func run(args []string, stdout, stderr io.Writer) int {
 		usage(stdout)
 		return 0
 	default:
-		fmt.Fprintf(stderr, "marmur: unknown subcommand %q\n", args[0])
+		_, _ = fmt.Fprintf(stderr, "marmur: unknown subcommand %q\n", args[0])
 		usage(stderr)
 		return 2
 	}
 
 	if err != nil {
-		fmt.Fprintln(stderr, err)
+		_, _ = fmt.Fprintln(stderr, err)
 		return 1
 	}
 	return 0
 }
 
 func usage(stderr io.Writer) {
-	fmt.Fprint(stderr, `usage: marmur <command>
+	_, _ = fmt.Fprint(stderr, `usage: marmur <command>
 
 commands:
 	capture		one JSON packet per line until Ctrl-C (needs root permissions)
@@ -84,6 +84,6 @@ func runSnapshot(ctx context.Context, stdout, stderr io.Writer) error {
 		return err
 	}
 
-	fmt.Fprintf(stderr, "snapshot: %d sockets\n", summary.Emitted)
+	_, _ = fmt.Fprintf(stderr, "snapshot: %d sockets\n", summary.Emitted)
 	return nil
 }

@@ -1,11 +1,14 @@
 package tcpdump
 
 import (
+	"bufio"
 	"errors"
 	"io"
 	"strings"
 	"testing"
 	"testing/iotest"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/Pieczasz/marmur/internal/capture"
 )
@@ -24,6 +27,8 @@ func collect(t *testing.T, r io.Reader) ([]capture.PacketEvent, int, error) {
 }
 
 func TestReadPacketsMixedOutput(t *testing.T) {
+	t.Parallel()
+
 	input := strings.Join([]string{
 		"tcpdump: data link type PKTAP",
 		"listening on pktap,all, link-type PKTAP (Apple DLT_PKTAP), snapshot length 524288 bytes",
@@ -57,6 +62,8 @@ func TestReadPacketsMixedOutput(t *testing.T) {
 }
 
 func TestReadPacketsEmptyInput(t *testing.T) {
+	t.Parallel()
+
 	got, skipped, err := collect(t, strings.NewReader(""))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -67,6 +74,8 @@ func TestReadPacketsEmptyInput(t *testing.T) {
 }
 
 func TestReadPacketsLastLineWithoutNewline(t *testing.T) {
+	t.Parallel()
+
 	got, skipped, err := collect(t, strings.NewReader(streamOut+"\n"+streamIn))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -79,7 +88,9 @@ func TestReadPacketsLastLineWithoutNewline(t *testing.T) {
 	}
 }
 
-func TestReadPacketsLongLineDoesNotStopReading(t *testing.T) {
+func TestReadPacketsLineLongerThanInitialBuffer(t *testing.T) {
+	t.Parallel()
+
 	long := strings.Repeat("x", 100*1024)
 	input := streamOut + "\n" + long + "\n" + streamUDP + "\n"
 
@@ -98,7 +109,19 @@ func TestReadPacketsLongLineDoesNotStopReading(t *testing.T) {
 	}
 }
 
+func TestReadPacketsLineOverMaxReturnsError(t *testing.T) {
+	t.Parallel()
+
+	tooLong := strings.Repeat("x", maxLineBytes+1)
+	got, _, err := collect(t, strings.NewReader(streamOut+"\n"+tooLong+"\n"+streamUDP+"\n"))
+
+	require.ErrorIs(t, err, bufio.ErrTooLong)
+	require.Len(t, got, 1, "the event before the over-long line must still be emitted")
+}
+
 func TestReadPacketsReturnsReaderError(t *testing.T) {
+	t.Parallel()
+
 	boom := errors.New("pipe broke")
 	r := io.MultiReader(
 		strings.NewReader(streamOut+"\n"+streamIn+"\n"),

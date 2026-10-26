@@ -265,18 +265,14 @@ func TestCollectPacketsFromContextCancel(t *testing.T) {
 	summary, err := collectPacketsFrom(ctx, openSource(src, nil), func(capture.PacketEvent) {
 		t.Fatal("emit called after cancel")
 	})
-	if err != nil {
-		t.Fatalf("context stop should be a nil error, got %v", err)
-	}
-	if summary != (capture.PacketSummary{}) {
-		t.Fatalf("summary = %+v, want zero", summary)
-	}
-	if !src.closed {
-		t.Fatal("source was not closed")
-	}
+	require.NoError(t, err)
+	require.Equal(t, capture.PacketSummary{}, summary)
+	require.True(t, src.closed)
 }
 
 func TestCollectPacketsFromDoesNotRetainZeroCopyData(t *testing.T) {
+	t.Parallel()
+
 	first := fxRecord{dlt: 1, ifname: "en0", flags: fxFlagOut, pre: 14, pid: 1, comm: "claude"}.
 		build(fxEthernet, fxIPv4("10.0.0.1", "10.0.0.2", 17, fxUDP(1000, 2000, 3), 31))
 	second := fxRecord{dlt: 1, ifname: "en0", flags: fxFlagIn, pre: 14, pid: 2, comm: "zen"}.
@@ -300,15 +296,13 @@ func TestCollectPacketsFromDoesNotRetainZeroCopyData(t *testing.T) {
 		t.Fatalf("collectPacketsFrom: %v", err)
 	}
 
-	if len(events) != 2 {
-		t.Fatalf("emitted %d events, want 2", len(events))
-	}
-	if events[0].Process != "claude" || events[0].PID != 1 || events[0].Src != ap("10.0.0.1:1000") {
-		t.Fatalf("first event was overwritten: %+v", events[0])
-	}
-	if events[1].Process != "zen" || events[1].PID != 2 || events[1].Src != ap("10.0.0.3:3000") {
-		t.Fatalf("second event wrong: %+v", events[1])
-	}
+	require.Len(t, events, 2)
+	require.Equal(t, "claude", events[0].Process)
+	require.Equal(t, uint32(1), events[0].PID)
+	require.Equal(t, ap("10.0.0.1:1000"), events[0].Src)
+	require.Equal(t, "zen", events[1].Process)
+	require.Equal(t, uint32(2), events[1].PID)
+	require.Equal(t, ap("10.0.0.3:3000"), events[1].Src)
 }
 
 func (f *fakeSource) Close() {

@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/Pieczasz/marmur/internal/capture"
 )
 
@@ -28,6 +30,8 @@ func ap(s string) netip.AddrPort { return netip.MustParseAddrPort(s) }
 func addrOnly(s string) netip.AddrPort { return netip.AddrPortFrom(netip.MustParseAddr(s), 0) }
 
 func TestParseTcpdumpLine(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name string
 		line string
@@ -359,46 +363,53 @@ func TestParseTcpdumpLine(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			got, ok := parseTcpdumpLine(tt.line)
-			if !ok {
-				t.Fatalf("expected a packet event, got ok=false for %q", tt.line)
-			}
-			assertPacketEvent(t, tt.want, got)
+			require.True(t, ok, "expected a packet event for %q", tt.line)
+			require.Equal(t, tt.want, got)
+			require.Equal(t, time.UTC, got.ObservedAt.Location())
 		})
 	}
 }
 
 func TestParseTcpdumpLineRejectsNonPackets(t *testing.T) {
-	lines := map[string]string{
-		"empty":                    "",
-		"whitespace":               "   \t",
-		"listening banner":         "listening on pktap,all, link-type PKTAP (Apple DLT_PKTAP), snapshot length 524288 bytes",
-		"tcpdump prefix":           "tcpdump: data link type PKTAP",
-		"verbose hint":             "tcpdump: verbose output suppressed, use -v[v]... for full protocol decode",
-		"read banner":              "reading from file t.pcap, link-type RAW (Raw IP)",
-		"captured stats":           "40 packets captured",
-		"filter stats":             "54 packets received by filter",
-		"dropped stats":            "0 packets dropped by kernel",
-		"ARP":                      tsText + " (en0, svc BE, in) ARP, Request who-has 192.168.178.1 tell 192.168.178.167, length 28",
-		"HH:MM:SS timestamp":       "22:04:15.717249 (proc ch.protonvpn.mac:74422, in) IP 192.0.2.1.443 > 198.51.100.10.51690: UDP, length 448",
-		"timestamp only":           tsText,
-		"truncated block":          tsText + " (utun6, proc claude:10",
-		"block without packet":     tsText + " (utun6, proc claude:1084:" + claudeUUID + ", out)",
-		"unclosed block":           tsText + " (utun6, proc claude:1084, out IP 10.2.0.2.1 > 1.1.1.1.53: UDP, length 1",
-		"bad timestamp":            "abc (utun6, out) IP 10.2.0.2.1 > 1.1.1.1.53: UDP, length 1",
-		"missing arrow":            tsText + " (utun6, out) IP 10.2.0.2.63352 160.79.104.10.443: tcp 0",
-		"missing colon after dst":  tsText + " (utun6, out) IP 10.2.0.2.63352 > 160.79.104.10.443 tcp 0",
-		"invalid source address":   tsText + " (utun6, out) IP 999.1.1.1.5 > 1.1.1.1.53: UDP, length 1",
-		"invalid destination":      tsText + " (utun6, out) IP 10.0.0.1.5 > nothost.53: UDP, length 1",
-		"port above 65535":         tsText + " (utun6, out) IP 10.0.0.1.99999 > 1.1.1.1.53: UDP, length 1",
-		"IP keyword with no addrs": tsText + " (utun6, out) IP",
+	t.Parallel()
+
+	lines := []struct {
+		name string
+		line string
+	}{
+		{"empty", ""},
+		{"whitespace", "   \t"},
+		{"listening banner", "listening on pktap,all, link-type PKTAP (Apple DLT_PKTAP), snapshot length 524288 bytes"},
+		{"tcpdump prefix", "tcpdump: data link type PKTAP"},
+		{"verbose hint", "tcpdump: verbose output suppressed, use -v[v]... for full protocol decode"},
+		{"read banner", "reading from file t.pcap, link-type RAW (Raw IP)"},
+		{"captured stats", "40 packets captured"},
+		{"filter stats", "54 packets received by filter"},
+		{"dropped stats", "0 packets dropped by kernel"},
+		{"ARP", tsText + " (en0, svc BE, in) ARP, Request who-has 192.168.178.1 tell 192.168.178.167, length 28"},
+		{"HH:MM:SS timestamp", "22:04:15.717249 (proc ch.protonvpn.mac:74422, in) IP 192.0.2.1.443 > 198.51.100.10.51690: UDP, length 448"},
+		{"timestamp only", tsText},
+		{"truncated block", tsText + " (utun6, proc claude:10"},
+		{"block without packet", tsText + " (utun6, proc claude:1084:" + claudeUUID + ", out)"},
+		{"unclosed block", tsText + " (utun6, proc claude:1084, out IP 10.2.0.2.1 > 1.1.1.1.53: UDP, length 1"},
+		{"bad timestamp", "abc (utun6, out) IP 10.2.0.2.1 > 1.1.1.1.53: UDP, length 1"},
+		{"missing arrow", tsText + " (utun6, out) IP 10.2.0.2.63352 160.79.104.10.443: tcp 0"},
+		{"missing colon after dst", tsText + " (utun6, out) IP 10.2.0.2.63352 > 160.79.104.10.443 tcp 0"},
+		{"invalid source address", tsText + " (utun6, out) IP 999.1.1.1.5 > 1.1.1.1.53: UDP, length 1"},
+		{"invalid destination", tsText + " (utun6, out) IP 10.0.0.1.5 > nothost.53: UDP, length 1"},
+		{"port above 65535", tsText + " (utun6, out) IP 10.0.0.1.99999 > 1.1.1.1.53: UDP, length 1"},
+		{"IP keyword with no addrs", tsText + " (utun6, out) IP"},
 	}
 
-	for name, line := range lines {
-		t.Run(name, func(t *testing.T) {
-			if got, ok := parseTcpdumpLine(line); ok {
-				t.Fatalf("expected ok=false for %q, got %+v", line, got)
-			}
+	for _, tt := range lines {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, ok := parseTcpdumpLine(tt.line)
+			require.False(t, ok, "parsed %q as %+v", tt.line, got)
 		})
 	}
 }
@@ -438,40 +449,13 @@ func FuzzParseTcpdumpLine(f *testing.F) {
 	})
 }
 
-func assertPacketEvent(t *testing.T, exp, act capture.PacketEvent) {
-	t.Helper()
+func BenchmarkParseTcpdumpLine(b *testing.B) {
+	line := tsText + " (utun6, proc claude:1084:" + claudeUUID + ", out) IP 10.2.0.2.63352 > 160.79.104.10.443: tcp 0"
 
-	if !act.ObservedAt.Equal(exp.ObservedAt) {
-		t.Errorf("ObservedAt mismatch: expected %v, got %v", exp.ObservedAt, act.ObservedAt)
-	}
-	if act.ObservedAt.Location() != time.UTC {
-		t.Errorf("ObservedAt must be UTC, got %v", act.ObservedAt.Location())
-	}
-	if act.Interface != exp.Interface {
-		t.Errorf("Interface mismatch: expected %q, got %q", exp.Interface, act.Interface)
-	}
-	if act.Process != exp.Process {
-		t.Errorf("Process mismatch: expected %q, got %q", exp.Process, act.Process)
-	}
-	if act.PID != exp.PID {
-		t.Errorf("PID mismatch: expected %d, got %d", exp.PID, act.PID)
-	}
-	if act.ProcessUUID != exp.ProcessUUID {
-		t.Errorf("ProcessUUID mismatch: expected %q, got %q", exp.ProcessUUID, act.ProcessUUID)
-	}
-	if act.Direction != exp.Direction {
-		t.Errorf("Direction mismatch: expected %q, got %q", exp.Direction, act.Direction)
-	}
-	if act.Protocol != exp.Protocol {
-		t.Errorf("Protocol mismatch: expected %q, got %q", exp.Protocol, act.Protocol)
-	}
-	if act.Src != exp.Src {
-		t.Errorf("Src mismatch: expected %s, got %s", exp.Src, act.Src)
-	}
-	if act.Dst != exp.Dst {
-		t.Errorf("Dst mismatch: expected %s, got %s", exp.Dst, act.Dst)
-	}
-	if act.Length != exp.Length {
-		t.Errorf("Length mismatch: expected %d, got %d", exp.Length, act.Length)
+	b.ReportAllocs()
+	for b.Loop() {
+		if _, ok := parseTcpdumpLine(line); !ok {
+			b.Fatal("parse failed")
+		}
 	}
 }

@@ -115,6 +115,8 @@ func fxUDP(sport, dport uint16, payload int) []byte {
 }
 
 func TestDecodePktap(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name string
 		data []byte
@@ -247,6 +249,8 @@ func TestDecodePktap(t *testing.T) {
 }
 
 func TestDecodePktapErrors(t *testing.T) {
+	t.Parallel()
+
 	validIP := fxIPv4("10.0.0.1", "10.0.0.2", 17, fxUDP(1, 2, 0), 28)
 	short := fxRecord{dlt: 1, ifname: "en0", pre: 14}.build(fxEthernet, validIP)[:100]
 	lying := fxRecord{hdrLen: 400, dlt: 1, ifname: "en0", pre: 14}.build(fxEthernet, validIP)

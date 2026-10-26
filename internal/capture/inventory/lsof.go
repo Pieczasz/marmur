@@ -159,7 +159,11 @@ func (p *lsofParser) parseProtocol(val string) {
 		return
 	}
 
-	p.currentEvent.Protocol = capture.Protocol(strings.ToUpper(val))
+	protocol := capture.Protocol(strings.ToUpper(val))
+	switch protocol {
+	case capture.TCP, capture.UDP, capture.ICMP, capture.ICMPv6:
+		p.currentEvent.Protocol = protocol
+	}
 }
 
 func (p *lsofParser) parseState(val string) {

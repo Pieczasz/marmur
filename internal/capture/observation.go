@@ -75,11 +75,3 @@ type SocketEvent struct {
 	FileDescriptor uint32 `json:"file_descriptor"`
 	AccessMode     string `json:"access_mode"`
 }
-
-func (e *SocketEvent) IsIPv4() bool {
-	return e.Local.Addr.Is4() || (e.Remote != nil && e.Remote.Addr.Is4())
-}
-
-func (e *SocketEvent) IsIPv6() bool {
-	return e.Local.Addr.Is6() || (e.Remote != nil && e.Remote.Addr.Is6())
-}
