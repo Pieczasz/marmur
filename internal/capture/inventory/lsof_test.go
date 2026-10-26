@@ -6,11 +6,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/Pieczasz/marmur/internal/capture"
 )
 
+var testNow = time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
+
 func TestParseLsofStream(t *testing.T) {
-	fixedTime := time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
+	t.Parallel()
 
 	tests := []struct {
 		name     string
@@ -30,7 +34,7 @@ func TestParseLsofStream(t *testing.T) {
 			}, "\n"),
 			expected: []capture.SocketEvent{
 				{
-					ObservedAt:     fixedTime,
+					ObservedAt:     testNow,
 					Command:        "zen",
 					PID:            59292,
 					User:           "pieczasz",
@@ -64,7 +68,7 @@ func TestParseLsofStream(t *testing.T) {
 			}, "\n"),
 			expected: []capture.SocketEvent{
 				{
-					ObservedAt:     fixedTime,
+					ObservedAt:     testNow,
 					Command:        "rapportd",
 					PID:            941,
 					User:           "pieczasz",
@@ -92,7 +96,7 @@ func TestParseLsofStream(t *testing.T) {
 			}, "\n"),
 			expected: []capture.SocketEvent{
 				{
-					ObservedAt:     fixedTime,
+					ObservedAt:     testNow,
 					Command:        "identityservicesd",
 					PID:            956,
 					User:           "pieczasz",
@@ -121,7 +125,7 @@ func TestParseLsofStream(t *testing.T) {
 			}, "\n"),
 			expected: []capture.SocketEvent{
 				{
-					ObservedAt:     fixedTime,
+					ObservedAt:     testNow,
 					Command:        "node",
 					PID:            1234,
 					User:           "root",
@@ -165,7 +169,7 @@ func TestParseLsofStream(t *testing.T) {
 			}, "\n"),
 			expected: []capture.SocketEvent{
 				{
-					ObservedAt:     fixedTime,
+					ObservedAt:     testNow,
 					Command:        "daemon",
 					PID:            500,
 					User:           "user",
@@ -181,7 +185,7 @@ func TestParseLsofStream(t *testing.T) {
 					Remote: nil,
 				},
 				{
-					ObservedAt:     fixedTime,
+					ObservedAt:     testNow,
 					Command:        "daemon",
 					PID:            500,
 					User:           "user",
@@ -201,7 +205,7 @@ func TestParseLsofStream(t *testing.T) {
 					},
 				},
 				{
-					ObservedAt:     fixedTime,
+					ObservedAt:     testNow,
 					Command:        "other",
 					PID:            600,
 					User:           "user",
@@ -233,7 +237,7 @@ func TestParseLsofStream(t *testing.T) {
 			}, "\n"),
 			expected: []capture.SocketEvent{
 				{
-					ObservedAt:     fixedTime,
+					ObservedAt:     testNow,
 					Command:        "badapp",
 					PID:            777,
 					User:           "user",
@@ -276,7 +280,7 @@ func TestParseLsofStream(t *testing.T) {
 			}, "\n"),
 			expected: []capture.SocketEvent{
 				{
-					ObservedAt:     fixedTime,
+					ObservedAt:     testNow,
 					Command:        "curl",
 					PID:            700,
 					User:           "pieczasz",
@@ -296,7 +300,7 @@ func TestParseLsofStream(t *testing.T) {
 					},
 				},
 				{
-					ObservedAt:     fixedTime,
+					ObservedAt:     testNow,
 					Command:        "curl",
 					PID:            700,
 					User:           "pieczasz",
@@ -316,7 +320,7 @@ func TestParseLsofStream(t *testing.T) {
 					},
 				},
 				{
-					ObservedAt:     fixedTime,
+					ObservedAt:     testNow,
 					Command:        "curl",
 					PID:            700,
 					User:           "pieczasz",
@@ -352,7 +356,7 @@ func TestParseLsofStream(t *testing.T) {
 			}, "\n"),
 			expected: []capture.SocketEvent{
 				{
-					ObservedAt:     fixedTime,
+					ObservedAt:     testNow,
 					Command:        "com.docker.backend",
 					PID:            63116,
 					User:           "pieczasz",
@@ -367,7 +371,7 @@ func TestParseLsofStream(t *testing.T) {
 					Remote: nil,
 				},
 				{
-					ObservedAt:     fixedTime,
+					ObservedAt:     testNow,
 					Command:        "com.docker.backend",
 					PID:            63116,
 					User:           "pieczasz",
@@ -401,7 +405,7 @@ func TestParseLsofStream(t *testing.T) {
 			}, "\n"),
 			expected: []capture.SocketEvent{
 				{
-					ObservedAt:     fixedTime,
+					ObservedAt:     testNow,
 					Command:        "Discord Helper (Renderer)",
 					PID:            81623,
 					User:           "501",
@@ -418,7 +422,7 @@ func TestParseLsofStream(t *testing.T) {
 					},
 				},
 				{
-					ObservedAt:     fixedTime,
+					ObservedAt:     testNow,
 					Command:        "Discord Helper (Renderer)",
 					PID:            81623,
 					User:           "501",
@@ -451,7 +455,7 @@ func TestParseLsofStream(t *testing.T) {
 			}, "\n"),
 			expected: []capture.SocketEvent{
 				{
-					ObservedAt:     fixedTime,
+					ObservedAt:     testNow,
 					Command:        "full-line-inference",
 					PID:            86101,
 					User:           "501",
@@ -481,7 +485,7 @@ func TestParseLsofStream(t *testing.T) {
 			}, "\n"),
 			expected: []capture.SocketEvent{
 				{
-					ObservedAt:     fixedTime,
+					ObservedAt:     testNow,
 					Command:        "com.apple.WebKit.Networking",
 					PID:            400,
 					User:           "501",
@@ -503,7 +507,9 @@ func TestParseLsofStream(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := newLSOFParser(fixedTime)
+			t.Parallel()
+
+			p := newLSOFParser(testNow)
 			lines := strings.SplitSeq(tt.input, "\n")
 			for line := range lines {
 				if len(line) < 2 {
@@ -511,64 +517,46 @@ func TestParseLsofStream(t *testing.T) {
 				}
 				p.parseFlag(line[0], line[1:])
 			}
-			actual := p.finish()
 
-			if len(actual) != len(tt.expected) {
-				t.Fatalf("expected %d events, got %d", len(tt.expected), len(actual))
-			}
-
-			for i := range actual {
-				assertSocketEvent(t, i, tt.expected[i], actual[i])
-			}
+			require.Equal(t, tt.expected, p.finish())
 		})
 	}
 }
 
-func assertSocketEvent(t *testing.T, idx int, exp, act capture.SocketEvent) {
-	t.Helper()
-
-	if act.PID != exp.PID {
-		t.Errorf("[%d] PID mismatch: expected %d, got %d", idx, exp.PID, act.PID)
-	}
-	if act.Command != exp.Command {
-		t.Errorf("[%d] Command mismatch: expected %q, got %q", idx, exp.Command, act.Command)
-	}
-	if act.User != exp.User {
-		t.Errorf("[%d] User mismatch: expected %q, got %q", idx, exp.User, act.User)
-	}
-	if act.FileDescriptor != exp.FileDescriptor {
-		t.Errorf("[%d] FD mismatch: expected %d, got %d", idx, exp.FileDescriptor, act.FileDescriptor)
-	}
-	if act.AccessMode != exp.AccessMode {
-		t.Errorf("[%d] AccessMode mismatch: expected %q, got %q", idx, exp.AccessMode, act.AccessMode)
-	}
-	if act.Protocol != exp.Protocol {
-		t.Errorf("[%d] Protocol mismatch: expected %q, got %q", idx, exp.Protocol, act.Protocol)
-	}
-	if act.TCPState != exp.TCPState {
-		t.Errorf("[%d] TCPState mismatch: expected %q, got %q", idx, exp.TCPState, act.TCPState)
+func FuzzParseLsofStream(f *testing.F) {
+	seeds := []string{
+		"",
+		"p59292\nczen\nupieczasz\nf115u\nPTCP\nTST=ESTABLISHED\nn10.2.0.2:50867->66.203.125.13:443",
+		"p941\ncrapportd\nupieczasz\nf11u\nPTCP\nTST=LISTEN\nn*:50265",
+		"p956\ncidentityservicesd\nupieczasz\nf13u\nPUDP\nn*:*",
+		"p1\nf\nf999999999999999999999\nPX\nn[::1]:1->[::1]:2",
+		"p\f1\nf-1\nPX\nn1.2.3.4:99999->:",
 	}
 
-	assertEndpoint(t, idx, "Local", exp.Local, act.Local)
+	for _, s := range seeds {
+		f.Add(s)
+	}
 
-	if (exp.Remote == nil) != (act.Remote == nil) {
-		t.Fatalf("[%d] Remote presence mismatch: expected nil=%v, got nil=%v", idx, exp.Remote == nil, act.Remote == nil)
-	}
-	if exp.Remote != nil && act.Remote != nil {
-		assertEndpoint(t, idx, "Remote", *exp.Remote, *act.Remote)
-	}
-}
+	f.Fuzz(func(t *testing.T, input string) {
+		p := newLSOFParser(testNow)
 
-func assertEndpoint(t *testing.T, idx int, side string, exp, act capture.SocketEndpoint) {
-	t.Helper()
+		lines := strings.SplitSeq(input, "\n")
+		for line := range lines {
+			if len(line) < 2 {
+				continue
+			}
+			p.parseFlag(line[0], line[1:])
+		}
 
-	if exp.IsWildcard != act.IsWildcard {
-		t.Errorf("[%d] %s IsWildcard mismatch: expected %v, got %v", idx, side, exp.IsWildcard, act.IsWildcard)
-	}
-	if exp.Port != act.Port {
-		t.Errorf("[%d] %s Port mismatch: expected %d, got %d", idx, side, exp.Port, act.Port)
-	}
-	if exp.Addr != act.Addr {
-		t.Errorf("[%d] %s Addr mismatch: expected %s, got %s", idx, side, exp.Addr, act.Addr)
-	}
+		for _, ev := range p.finish() {
+			switch ev.Protocol {
+			case capture.TCP, capture.UDP, capture.ICMP, capture.ICMPv6, capture.ESP:
+			default:
+				t.Errorf("unexpected protocol %q from %q", ev.Protocol, input)
+			}
+			if !ev.ObservedAt.Equal(testNow) {
+				t.Errorf("event stamped with %v, want %v", ev.ObservedAt, testNow)
+			}
+		}
+	})
 }

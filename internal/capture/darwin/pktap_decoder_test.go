@@ -4,10 +4,11 @@ package darwin
 
 import (
 	"encoding/binary"
-	"errors"
 	"net/netip"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/Pieczasz/marmur/internal/capture"
 )
@@ -97,8 +98,6 @@ func fxIPv6(src, dst string, next byte, l4 []byte, payloadLen int) []byte {
 	return append(b, l4...)
 }
 
-// fxTCP returns a TCP header of hdrLen bytes (20..60). Payload bytes are not included:
-// lengths come from the IP header, as with a snaplen cut.
 func fxTCP(sport, dport uint16, hdrLen int) []byte {
 	b := make([]byte, hdrLen)
 	binary.BigEndian.PutUint16(b[0:], sport)
@@ -237,12 +236,12 @@ func TestDecodePktap(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			got, err := decodePktap(tt.data, fxTS)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			assertPacketEvent(t, tt.want, got)
-			assertPktapExtras(t, tt.want, got)
+			require.NoError(t, err)
+			require.Equal(t, tt.want, got)
+			require.Equal(t, time.UTC, got.ObservedAt.Location())
 		})
 	}
 }
@@ -272,10 +271,10 @@ func TestDecodePktapErrors(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := decodePktap(tt.data, fxTS)
-			if !errors.Is(err, tt.want) {
-				t.Fatalf("want %v, got err=%v event=%+v", tt.want, err, got)
-			}
+			t.Parallel()
+
+			_, err := decodePktap(tt.data, fxTS)
+			require.ErrorIs(t, err, tt.want)
 		})
 	}
 }
@@ -305,25 +304,6 @@ func FuzzDecodePktap(f *testing.F) {
 	})
 }
 
-func assertPktapExtras(t *testing.T, exp, act capture.PacketEvent) {
-	t.Helper()
-	if act.EffectiveProcess != exp.EffectiveProcess {
-		t.Errorf("EffectiveProcess mismatch: expected %q, got %q", exp.EffectiveProcess, act.EffectiveProcess)
-	}
-	if act.EffectivePID != exp.EffectivePID {
-		t.Errorf("EffectivePID mismatch: expected %d, got %d", exp.EffectivePID, act.EffectivePID)
-	}
-	if act.EffectiveUUID != exp.EffectiveUUID {
-		t.Errorf("EffectiveUUID mismatch: expected %q, got %q", exp.EffectiveUUID, act.EffectiveUUID)
-	}
-	if act.Delegated != exp.Delegated {
-		t.Errorf("Delegated mismatch: expected %v, got %v", exp.Delegated, act.Delegated)
-	}
-	if act.FlowID != exp.FlowID {
-		t.Errorf("FlowID mismatch: expected %#x, got %#x", exp.FlowID, act.FlowID)
-	}
-}
-
 func ap(s string) netip.AddrPort {
 	return netip.MustParseAddrPort(s)
 }
@@ -332,40 +312,15 @@ func addrOnly(s string) netip.AddrPort {
 	return netip.AddrPortFrom(netip.MustParseAddr(s), 0)
 }
 
-func assertPacketEvent(t *testing.T, exp, act capture.PacketEvent) {
-	t.Helper()
+func BenchmarkDecodePktap(b *testing.B) {
+	data := fxRecord{dlt: 1, ifname: "en0", flags: fxFlagOut, pre: 14, pid: 1084, comm: "claude",
+		epid: 1084, ecomm: "claude", flowid: 0xbef45f65, uuid: fxUUID}.
+		build(fxEthernet, fxIPv4("10.2.0.2", "160.79.104.10", 6, fxTCP(63352, 443, 32), 20+32+39))
 
-	if !act.ObservedAt.Equal(exp.ObservedAt) {
-		t.Errorf("ObservedAt mismatch: expected %v, got %v", exp.ObservedAt, act.ObservedAt)
-	}
-	if act.ObservedAt.Location() != time.UTC {
-		t.Errorf("ObservedAt must be UTC, got %v", act.ObservedAt.Location())
-	}
-	if act.Interface != exp.Interface {
-		t.Errorf("Interface mismatch: expected %q, got %q", exp.Interface, act.Interface)
-	}
-	if act.Process != exp.Process {
-		t.Errorf("Process mismatch: expected %q, got %q", exp.Process, act.Process)
-	}
-	if act.PID != exp.PID {
-		t.Errorf("PID mismatch: expected %d, got %d", exp.PID, act.PID)
-	}
-	if act.ProcessUUID != exp.ProcessUUID {
-		t.Errorf("ProcessUUID mismatch: expected %q, got %q", exp.ProcessUUID, act.ProcessUUID)
-	}
-	if act.Direction != exp.Direction {
-		t.Errorf("Direction mismatch: expected %q, got %q", exp.Direction, act.Direction)
-	}
-	if act.Protocol != exp.Protocol {
-		t.Errorf("Protocol mismatch: expected %q, got %q", exp.Protocol, act.Protocol)
-	}
-	if act.Src != exp.Src {
-		t.Errorf("Src mismatch: expected %s, got %s", exp.Src, act.Src)
-	}
-	if act.Dst != exp.Dst {
-		t.Errorf("Dst mismatch: expected %s, got %s", exp.Dst, act.Dst)
-	}
-	if act.Length != exp.Length {
-		t.Errorf("Length mismatch: expected %d, got %d", exp.Length, act.Length)
+	b.ReportAllocs()
+	for b.Loop() {
+		if _, err := decodePktap(data, fxTS); err != nil {
+			b.Fatal(err)
+		}
 	}
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/gopacket/gopacket"
 	"github.com/gopacket/gopacket/layers"
 	"github.com/gopacket/gopacket/pcap"
+	"github.com/stretchr/testify/require"
 
 	"github.com/Pieczasz/marmur/internal/capture"
 )
@@ -33,7 +34,8 @@ type fakeSource struct {
 }
 
 func TestDefaultPktapConfig(t *testing.T) {
-	got := defaultPktapConfig()
+	t.Parallel()
+
 	want := pktapConfig{
 		device:    "pktap,all",
 		snapLen:   512,
@@ -42,18 +44,14 @@ func TestDefaultPktapConfig(t *testing.T) {
 		immediate: true,
 		wantPktap: true,
 	}
-	if got != want {
-		t.Fatalf("default config:\nwant %+v\ngot  %+v", want, got)
-	}
+	require.Equal(t, want, defaultPktapConfig())
 }
 
 func TestValidateLinkType(t *testing.T) {
-	if err := validateLinkType(layers.LinkTypeApplePKTAP); err != nil {
-		t.Fatalf("ApplePKTAP rejected: %v", err)
-	}
-	if err := validateLinkType(layers.LinkTypeEthernet); err == nil {
-		t.Fatal("Ethernet link type accepted; want an error")
-	}
+	t.Parallel()
+
+	require.NoError(t, validateLinkType(layers.LinkTypeApplePKTAP))
+	require.Error(t, validateLinkType(layers.LinkTypeEthernet))
 }
 
 func (f *fakeSource) ZeroCopyReadPacketData() ([]byte, gopacket.CaptureInfo, error) {
@@ -97,6 +95,8 @@ func (f *fakeSource) Stats() (*pcap.Stats, error) {
 }
 
 func TestCollectPacketsFromCountsAndEmits(t *testing.T) {
+	t.Parallel()
+
 	validData := fxRecord{dlt: 1, ifname: "en0", flags: fxFlagOut, pre: 14, pid: 1084, comm: "claude", uuid: fxUUID}.
 		build(fxEthernet, fxIPv4("10.2.0.2", "160.79.104.10", 6, fxTCP(63352, 443, 20), 20+20+7))
 	wantEvent := capture.PacketEvent{
@@ -158,20 +158,15 @@ func TestCollectPacketsFromCountsAndEmits(t *testing.T) {
 		PacketsDropped:   7,
 		PacketsIfDropped: 2,
 	}
-	if summary != want {
-		t.Fatalf("summary:\nwant %+v\ngot  %+v", want, summary)
-	}
-	if len(events) != 1 {
-		t.Fatalf("emitted %d events, want 1", len(events))
-	}
-	assertPacketEvent(t, wantEvent, events[0])
-	assertPktapExtras(t, wantEvent, events[0])
-	if !src.closed {
-		t.Fatal("source was not closed")
-	}
+	require.Equal(t, want, summary)
+	require.Len(t, events, 1)
+	require.Equal(t, wantEvent, events[0])
+	require.True(t, src.closed)
 }
 
 func TestCollectPacketsFromIgnoresTimeouts(t *testing.T) {
+	t.Parallel()
+
 	validData := fxRecord{dlt: 1, ifname: "en0", flags: fxFlagIn, pre: 14, pid: 1, comm: "a"}.
 		build(fxEthernet, fxIPv4("10.0.0.1", "10.0.0.2", 17, fxUDP(1, 2, 3), 31))
 
@@ -194,18 +189,15 @@ func TestCollectPacketsFromIgnoresTimeouts(t *testing.T) {
 	summary, err := collectPacketsFrom(ctx, openSource(src, nil), func(capture.PacketEvent) {
 		emitted++
 	})
-	if err != nil {
-		t.Fatalf("collectPacketsFrom: %v", err)
-	}
-	if summary.Emitted != 1 || emitted != 1 {
-		t.Fatalf("emitted summary=%d events=%d, want 1", summary.Emitted, emitted)
-	}
-	if summary.NonIP != 0 || summary.Truncated != 0 || summary.Unsupported != 0 || summary.OtherErrors != 0 {
-		t.Fatalf("timeouts counted as errors: %+v", summary)
-	}
+	require.NoError(t, err)
+	require.Equal(t, 1, summary.Emitted)
+	require.Equal(t, 1, emitted)
+	require.Equal(t, capture.PacketSummary{Emitted: 1}, summary)
 }
 
 func TestCollectPacketsFromFatalReadError(t *testing.T) {
+	t.Parallel()
+
 	validData := fxRecord{dlt: 1, ifname: "en0", flags: fxFlagOut, pre: 14, pid: 1, comm: "a"}.
 		build(fxEthernet, fxIPv4("10.0.0.1", "10.0.0.2", 17, fxUDP(1, 2, 3), 31))
 	errRead := errors.New("pcap read failed")
@@ -219,18 +211,15 @@ func TestCollectPacketsFromFatalReadError(t *testing.T) {
 	summary, err := collectPacketsFrom(context.Background(), openSource(src, nil), func(capture.PacketEvent) {
 		emitted++
 	})
-	if !errors.Is(err, errRead) {
-		t.Fatalf("want %v, got %v", errRead, err)
-	}
-	if summary.Emitted != 1 || emitted != 1 {
-		t.Fatalf("emitted summary=%d events=%d, want 1", summary.Emitted, emitted)
-	}
-	if !src.closed {
-		t.Fatal("source was not closed")
-	}
+	require.ErrorIs(t, err, errRead)
+	require.Equal(t, 1, summary.Emitted)
+	require.Equal(t, 1, emitted)
+	require.True(t, src.closed)
 }
 
 func TestCollectPacketsFromStatsError(t *testing.T) {
+	t.Parallel()
+
 	validData := fxRecord{dlt: 1, ifname: "en0", flags: fxFlagOut, pre: 14, pid: 1, comm: "a"}.
 		build(fxEthernet, fxIPv4("10.0.0.1", "10.0.0.2", 17, fxUDP(1, 2, 3), 31))
 	errStats := errors.New("stats failed")
@@ -247,32 +236,26 @@ func TestCollectPacketsFromStatsError(t *testing.T) {
 	}
 
 	summary, err := collectPacketsFrom(ctx, openSource(src, nil), func(capture.PacketEvent) {})
-	if !errors.Is(err, errStats) {
-		t.Fatalf("want %v, got %v", errStats, err)
-	}
-	if summary.Emitted != 1 {
-		t.Fatalf("summary.Emitted = %d, want 1", summary.Emitted)
-	}
-	if !src.closed {
-		t.Fatal("source was not closed")
-	}
+	require.ErrorIs(t, err, errStats)
+	require.Equal(t, 1, summary.Emitted)
+	require.True(t, src.closed)
 }
 
 func TestCollectPacketsFromOpenError(t *testing.T) {
+	t.Parallel()
+
 	errOpen := errors.New("open failed")
 
 	summary, err := collectPacketsFrom(context.Background(), openSource(nil, errOpen), func(capture.PacketEvent) {
 		t.Fatal("emit called after open error")
 	})
-	if !errors.Is(err, errOpen) {
-		t.Fatalf("want %v, got %v", errOpen, err)
-	}
-	if summary != (capture.PacketSummary{}) {
-		t.Fatalf("summary = %+v, want zero", summary)
-	}
+	require.ErrorIs(t, err, errOpen)
+	require.Equal(t, capture.PacketSummary{}, summary)
 }
 
 func TestCollectPacketsFromContextCancel(t *testing.T) {
+	t.Parallel()
+
 	src := &fakeSource{steps: []fakeRead{{err: pcap.NextErrorTimeoutExpired}}}
 
 	ctx, cancel := context.WithCancel(context.Background())
